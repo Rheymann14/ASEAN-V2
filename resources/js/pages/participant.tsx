@@ -13,6 +13,8 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Switch } from '@/components/ui/switch';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -40,19 +42,19 @@ import {
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-
 import {
     Plus,
     Search,
     MoreHorizontal,
     Pencil,
     Trash2,
+    Check,
     CheckCircle2,
     XCircle,
     Users,
     Globe2,
     BadgeCheck,
+    ChevronsUpDown,
     ImageUp,
     QrCode as QrCodeIcon,
     Printer,
@@ -75,6 +77,7 @@ type UserType = {
     name: string; // e.g. Prime Minister
     slug?: string;
     is_active: boolean;
+    sequence_order?: number | null;
 };
 
 type ProgrammeRow = {
@@ -100,13 +103,34 @@ type ParticipantRow = {
     full_name: string;
     email: string;
     contact_number?: string | null;
+    contact_country_code?: string | null;
     country_id: number | null;
     user_type_id: number | null;
+    other_user_type?: string | null;
+    honorific_title?: string | null;
+    honorific_other?: string | null;
+    given_name?: string | null;
+    middle_name?: string | null;
+    family_name?: string | null;
+    suffix?: string | null;
+    sex_assigned_at_birth?: string | null;
+    organization_name?: string | null;
+    position_title?: string | null;
+    ip_affiliation?: boolean;
+    ip_group_name?: string | null;
     is_active: boolean;
     consent_contact_sharing?: boolean;
     consent_photo_video?: boolean;
     has_food_restrictions?: boolean;
     food_restrictions?: string[];
+    dietary_allergies?: string | null;
+    dietary_other?: string | null;
+    accessibility_needs?: string[];
+    accessibility_other?: string | null;
+    emergency_contact_name?: string | null;
+    emergency_contact_relationship?: string | null;
+    emergency_contact_phone?: string | null;
+    emergency_contact_email?: string | null;
     created_at?: string | null;
     joined_programme_ids?: number[];
     checked_in_programme_ids?: number[];
@@ -178,6 +202,15 @@ const FOOD_RESTRICTION_OPTIONS = [
     { value: 'lactose_intolerant', label: 'Lactose intolerant' },
     { value: 'nut_allergy', label: 'Nut allergy' },
     { value: 'seafood_allergy', label: 'Seafood allergy' },
+    { value: 'allergies', label: 'Allergies' },
+    { value: 'other', label: 'Other' },
+] as const;
+
+const ACCESSIBILITY_NEEDS_OPTIONS = [
+    { value: 'wheelchair_access', label: 'Wheelchair access' },
+    { value: 'sign_language_interpreter', label: 'Sign language interpreter' },
+    { value: 'assistive_technology_support', label: 'Assistive technology support' },
+    { value: 'other', label: 'Other accommodations' },
 ] as const;
 
 function formatDateSafe(value?: string | null) {
@@ -810,6 +843,13 @@ export default function ParticipantPage(props: PageProps) {
     const [participantCountryFilter, setParticipantCountryFilter] = React.useState<string>('all');
     const [participantTypeFilter, setParticipantTypeFilter] = React.useState<string>('all');
     const [participantStatusFilter, setParticipantStatusFilter] = React.useState<'all' | 'active' | 'inactive'>('all');
+    const [participantEventFilter, setParticipantEventFilter] = React.useState<string>('all');
+    const [participantCountryOpen, setParticipantCountryOpen] = React.useState(false);
+    const [participantTypeOpen, setParticipantTypeOpen] = React.useState(false);
+    const [participantStatusOpen, setParticipantStatusOpen] = React.useState(false);
+    const [participantEventOpen, setParticipantEventOpen] = React.useState(false);
+    const [participantFormCountryOpen, setParticipantFormCountryOpen] = React.useState(false);
+    const [participantFormTypeOpen, setParticipantFormTypeOpen] = React.useState(false);
 
     const [countryQuery, setCountryQuery] = React.useState('');
     const [userTypeQuery, setUserTypeQuery] = React.useState('');
@@ -819,10 +859,7 @@ export default function ParticipantPage(props: PageProps) {
     const qrCacheRef = React.useRef<Record<number, string>>({});
 
     async function ensureQrForParticipants(list: ParticipantRow[]) {
-        // only generate for non-CHED participants with qr_payload
-        const pending = list.filter(
-            (p) => !isChedParticipant(p) && !!p.qr_payload && !qrCacheRef.current[p.id],
-        );
+        const pending = list.filter((p) => !!p.qr_payload && !qrCacheRef.current[p.id]);
 
         if (pending.length === 0) return;
 
@@ -897,22 +934,64 @@ export default function ParticipantPage(props: PageProps) {
         full_name: string;
         email: string;
         contact_number: string;
+        contact_country_code: string;
         country_id: string; // Select uses string
         user_type_id: string; // Select uses string
+        other_user_type: string;
+        honorific_title: string;
+        honorific_other: string;
+        given_name: string;
+        middle_name: string;
+        family_name: string;
+        suffix: string;
+        sex_assigned_at_birth: string;
+        organization_name: string;
+        position_title: string;
+        ip_affiliation: boolean;
+        ip_group_name: string;
         is_active: boolean;
         password: string;
         has_food_restrictions: boolean;
         food_restrictions: string[];
+        dietary_allergies: string;
+        dietary_other: string;
+        accessibility_needs: string[];
+        accessibility_other: string;
+        emergency_contact_name: string;
+        emergency_contact_relationship: string;
+        emergency_contact_phone: string;
+        emergency_contact_email: string;
     }>({
         full_name: '',
         email: '',
         contact_number: '',
+        contact_country_code: '',
         country_id: '',
         user_type_id: '',
+        other_user_type: '',
+        honorific_title: '',
+        honorific_other: '',
+        given_name: '',
+        middle_name: '',
+        family_name: '',
+        suffix: '',
+        sex_assigned_at_birth: '',
+        organization_name: '',
+        position_title: '',
+        ip_affiliation: false,
+        ip_group_name: '',
         is_active: true,
         password: 'aseanph2026',
         has_food_restrictions: false,
         food_restrictions: [],
+        dietary_allergies: '',
+        dietary_other: '',
+        accessibility_needs: [],
+        accessibility_other: '',
+        emergency_contact_name: '',
+        emergency_contact_relationship: '',
+        emergency_contact_phone: '',
+        emergency_contact_email: '',
     });
 
     const countryForm = useForm<{
@@ -930,9 +1009,11 @@ export default function ParticipantPage(props: PageProps) {
     const userTypeForm = useForm<{
         name: string;
         is_active: boolean;
+        sequence_order: string;
     }>({
         name: '',
         is_active: true,
+        sequence_order: '',
     });
 
     // ---------------------------------------
@@ -981,6 +1062,10 @@ export default function ParticipantPage(props: PageProps) {
                 .sort((a, b) => new Date(a.startsAt).getTime() - new Date(b.startsAt).getTime()),
         [programmes, nowTs],
     );
+    const programmeById = React.useMemo(
+        () => new Map(normalizedProgrammes.map((programme) => [String(programme.id), programme])),
+        [normalizedProgrammes],
+    );
 
     const filteredProgrammes = React.useMemo(() => {
         const q = programmeQuery.trim().toLowerCase();
@@ -994,21 +1079,6 @@ export default function ParticipantPage(props: PageProps) {
             );
         });
     }, [normalizedProgrammes, programmeQuery]);
-
-    React.useEffect(() => {
-        // If CHED records were selected before, auto-remove them
-        const chedIds = resolvedParticipants.filter(isChedParticipant).map((p) => p.id);
-        if (chedIds.length === 0) return;
-
-        setSelectedParticipantIds((prev) => {
-            let changed = false;
-            const next = new Set(prev);
-            for (const id of chedIds) {
-                if (next.delete(id)) changed = true;
-            }
-            return changed ? next : prev;
-        });
-    }, [resolvedParticipants]);
 
     const filteredParticipants = React.useMemo(() => {
         const q = participantQuery.trim().toLowerCase();
@@ -1028,32 +1098,51 @@ export default function ParticipantPage(props: PageProps) {
             const matchesStatus =
                 participantStatusFilter === 'all' || (participantStatusFilter === 'active' ? p.is_active : !p.is_active);
 
-            return matchesQuery && matchesCountry && matchesType && matchesStatus;
+            const matchesEvent =
+                participantEventFilter === 'all' ||
+                (p.joined_programme_ids ?? []).includes(Number(participantEventFilter));
+
+            return matchesQuery && matchesCountry && matchesType && matchesStatus && matchesEvent;
         });
-    }, [resolvedParticipants, participantQuery, participantCountryFilter, participantTypeFilter, participantStatusFilter]);
+    }, [
+        resolvedParticipants,
+        participantQuery,
+        participantCountryFilter,
+        participantTypeFilter,
+        participantStatusFilter,
+        participantEventFilter,
+    ]);
 
     const filteredCountries = React.useMemo(() => {
         const q = countryQuery.trim().toLowerCase();
         return countries.filter((c) => (!q ? true : c.name.toLowerCase().includes(q) || c.code.toLowerCase().includes(q)));
     }, [countries, countryQuery]);
 
+    const orderedUserTypes = React.useMemo(() => {
+        return [...userTypes].sort((a, b) => {
+            const orderA = a.sequence_order ?? 0;
+            const orderB = b.sequence_order ?? 0;
+
+            if (orderA !== orderB) return orderA - orderB;
+
+            return a.id - b.id;
+        });
+    }, [userTypes]);
+
     const filteredUserTypes = React.useMemo(() => {
         const q = userTypeQuery.trim().toLowerCase();
-        return userTypes.filter((u) => (!q ? true : u.name.toLowerCase().includes(q) || (u.slug ?? '').toLowerCase().includes(q)));
-    }, [userTypes, userTypeQuery]);
+        return orderedUserTypes.filter((u) => (!q ? true : u.name.toLowerCase().includes(q) || (u.slug ?? '').toLowerCase().includes(q)));
+    }, [orderedUserTypes, userTypeQuery]);
 
     const participantById = React.useMemo(() => new Map(resolvedParticipants.map((p) => [p.id, p])), [resolvedParticipants]);
 
-    const selectableVisibleParticipants = React.useMemo(
-        () => filteredParticipants.filter((p) => !isChedParticipant(p)),
-        [filteredParticipants],
-    );
+    const selectableVisibleParticipants = React.useMemo(() => filteredParticipants, [filteredParticipants]);
 
     const selectedParticipantsPrintable = React.useMemo(() => {
         const out: ParticipantRow[] = [];
         selectedParticipantIds.forEach((id) => {
             const p = participantById.get(id);
-            if (p && !isChedParticipant(p)) out.push(p);
+            if (p) out.push(p);
         });
         return out;
     }, [selectedParticipantIds, participantById]);
@@ -1082,10 +1171,24 @@ export default function ParticipantPage(props: PageProps) {
     const allVisibleSelected =
         selectableVisibleParticipants.length > 0 &&
         selectableVisibleParticipants.every((p) => selectedParticipantIds.has(p.id));
+    const selectedCountry = participantCountryFilter === 'all' ? null : countryById.get(Number(participantCountryFilter));
+    const selectedUserType = participantTypeFilter === 'all' ? null : userTypeById.get(Number(participantTypeFilter));
+    const selectedEvent = participantEventFilter === 'all' ? null : programmeById.get(participantEventFilter);
+    const selectedStatusLabel =
+        participantStatusFilter === 'all' ? 'All Statuses' : participantStatusFilter === 'active' ? 'Active' : 'Inactive';
+    const selectedFormCountry = participantForm.data.country_id
+        ? countryById.get(Number(participantForm.data.country_id))
+        : null;
+    const selectedFormUserType = participantForm.data.user_type_id
+        ? userTypeById.get(Number(participantForm.data.user_type_id))
+        : null;
+    const isOtherParticipantType =
+        (selectedFormUserType?.slug ?? '').toLowerCase() === 'other' ||
+        (selectedFormUserType?.name ?? '').toLowerCase() === 'other';
 
     React.useEffect(() => {
         let active = true;
-        const pending = filteredParticipants.filter((p) => !isChedParticipant(p) && p.qr_payload && !qrCacheRef.current[p.id]);
+        const pending = filteredParticipants.filter((p) => p.qr_payload && !qrCacheRef.current[p.id]);
 
         if (pending.length === 0) return undefined;
 
@@ -1122,6 +1225,12 @@ export default function ParticipantPage(props: PageProps) {
         };
     }, [filteredParticipants]);
 
+    React.useEffect(() => {
+        if (!isOtherParticipantType && participantForm.data.other_user_type) {
+            participantForm.setData('other_user_type', '');
+        }
+    }, [isOtherParticipantType, participantForm]);
+
     // ---------------------------------------
     // Actions (CRUD)
     // ---------------------------------------
@@ -1138,11 +1247,32 @@ export default function ParticipantPage(props: PageProps) {
             full_name: p.full_name ?? '',
             email: p.email ?? '',
             contact_number: p.contact_number ?? '',
+            contact_country_code: p.contact_country_code ?? '',
             country_id: p.country_id ? String(p.country_id) : '',
             user_type_id: p.user_type_id ? String(p.user_type_id) : '',
+            other_user_type: p.other_user_type ?? '',
+            honorific_title: p.honorific_title ?? '',
+            honorific_other: p.honorific_other ?? '',
+            given_name: p.given_name ?? '',
+            middle_name: p.middle_name ?? '',
+            family_name: p.family_name ?? '',
+            suffix: p.suffix ?? '',
+            sex_assigned_at_birth: p.sex_assigned_at_birth ?? '',
+            organization_name: p.organization_name ?? '',
+            position_title: p.position_title ?? '',
+            ip_affiliation: !!p.ip_affiliation,
+            ip_group_name: p.ip_group_name ?? '',
             is_active: !!p.is_active,
             has_food_restrictions: !!p.has_food_restrictions,
             food_restrictions: p.food_restrictions ?? [],
+            dietary_allergies: p.dietary_allergies ?? '',
+            dietary_other: p.dietary_other ?? '',
+            accessibility_needs: p.accessibility_needs ?? [],
+            accessibility_other: p.accessibility_other ?? '',
+            emergency_contact_name: p.emergency_contact_name ?? '',
+            emergency_contact_relationship: p.emergency_contact_relationship ?? '',
+            emergency_contact_phone: p.emergency_contact_phone ?? '',
+            emergency_contact_email: p.emergency_contact_email ?? '',
         });
         participantForm.clearErrors();
         setParticipantDialogOpen(true);
@@ -1155,11 +1285,32 @@ export default function ParticipantPage(props: PageProps) {
             full_name: data.full_name.trim(),
             email: data.email.trim(),
             contact_number: data.contact_number.trim() || null,
+            contact_country_code: data.contact_country_code.trim() || null,
             country_id: data.country_id ? Number(data.country_id) : null,
             user_type_id: data.user_type_id ? Number(data.user_type_id) : null,
+            other_user_type: data.other_user_type.trim() || null,
+            honorific_title: data.honorific_title.trim() || null,
+            honorific_other: data.honorific_other.trim() || null,
+            given_name: data.given_name.trim() || null,
+            middle_name: data.middle_name.trim() || null,
+            family_name: data.family_name.trim() || null,
+            suffix: data.suffix.trim() || null,
+            sex_assigned_at_birth: data.sex_assigned_at_birth.trim() || null,
+            organization_name: data.organization_name.trim() || null,
+            position_title: data.position_title.trim() || null,
+            ip_affiliation: data.ip_affiliation,
+            ip_group_name: data.ip_affiliation ? data.ip_group_name.trim() || null : null,
             is_active: data.is_active,
             food_restrictions: data.food_restrictions,
             has_food_restrictions: data.food_restrictions.length > 0,
+            dietary_allergies: data.food_restrictions.includes('allergies') ? data.dietary_allergies.trim() || null : null,
+            dietary_other: data.food_restrictions.includes('other') ? data.dietary_other.trim() || null : null,
+            accessibility_needs: data.accessibility_needs,
+            accessibility_other: data.accessibility_needs.includes('other') ? data.accessibility_other.trim() || null : null,
+            emergency_contact_name: data.emergency_contact_name.trim() || null,
+            emergency_contact_relationship: data.emergency_contact_relationship.trim() || null,
+            emergency_contact_phone: data.emergency_contact_phone.trim() || null,
+            emergency_contact_email: data.emergency_contact_email.trim() || null,
             ...(editingParticipant ? {} : { password: data.password }),
         }));
 
@@ -1396,6 +1547,7 @@ export default function ParticipantPage(props: PageProps) {
         userTypeForm.transform((data) => ({
             name: data.name.trim(),
             is_active: data.is_active,
+            sequence_order: data.sequence_order.trim() === '' ? null : Number(data.sequence_order),
         }));
 
         if (editingUserType) {
@@ -1433,9 +1585,16 @@ export default function ParticipantPage(props: PageProps) {
     }
 
     function openAddUserType() {
+        const maxOrder = userTypes.reduce((acc, type) => Math.max(acc, type.sequence_order ?? 0), 0);
+        const nextOrder = maxOrder + 1;
         setEditingUserType(null);
         userTypeForm.reset();
         userTypeForm.clearErrors();
+        userTypeForm.setData({
+            name: '',
+            is_active: true,
+            sequence_order: String(nextOrder),
+        });
         setUserTypeDialogOpen(true);
     }
 
@@ -1444,6 +1603,7 @@ export default function ParticipantPage(props: PageProps) {
         userTypeForm.setData({
             name: u.name ?? '',
             is_active: !!u.is_active,
+            sequence_order: u.sequence_order === null || u.sequence_order === undefined ? '' : String(u.sequence_order),
         });
         userTypeForm.clearErrors();
         setUserTypeDialogOpen(true);
@@ -1451,7 +1611,7 @@ export default function ParticipantPage(props: PageProps) {
 
     async function requestPrintIds(orientation: PrintOrientation) {
         if (selectedParticipantsPrintable.length === 0) {
-            toast.error('Select at least one NON-CHED participant to print.');
+            toast.error('Select at least one participant to print.');
             return;
         }
 
@@ -1547,65 +1707,280 @@ export default function ParticipantPage(props: PageProps) {
                                         <CardDescription></CardDescription>
                                     </div>
 
-                                    <div className="flex w-full flex-col gap-2 sm:flex-row lg:w-auto lg:justify-end">
-                                        <div className="relative w-full lg:w-[320px]">
+                                    <div className="flex w-full flex-col gap-2 rounded-xl border border-slate-200/70 bg-slate-50/70 p-2 sm:flex-row sm:flex-wrap lg:w-auto lg:justify-end dark:border-slate-800 dark:bg-slate-900/40">
+                                        <div className="flex items-center px-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                                            Filters
+                                        </div>
+                                        <div className="relative w-full sm:w-[240px]">
                                             <Search className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-slate-500" />
                                             <Input
                                                 value={participantQuery}
                                                 onChange={(e) => setParticipantQuery(e.target.value)}
                                                 placeholder="Search name, email, country, type..."
-                                                className="pl-9"
+                                                className="h-9 pl-9 text-xs"
                                             />
                                         </div>
 
-                                        <Select value={participantCountryFilter} onValueChange={setParticipantCountryFilter}>
-                                            <SelectTrigger className="w-full sm:w-[200px]">
-                                                <SelectValue placeholder="Country" />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                <SelectItem value="all">All Countries</SelectItem>
-                                                {countries.map((c) => (
-                                                    <SelectItem key={c.id} value={String(c.id)}>
-                                                        <div className="flex items-center gap-2">
-                                                            <div className="grid size-5 place-items-center overflow-hidden rounded-md border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-950">
-                                                                <FlagImage
-                                                                    code={c.code}
-                                                                    name={c.name}
-                                                                    preferredSrc={c.flag_url}
-                                                                    className="h-full w-full object-cover"
+                                        <Popover open={participantCountryOpen} onOpenChange={setParticipantCountryOpen}>
+                                            <PopoverTrigger asChild>
+                                                <Button
+                                                    variant="outline"
+                                                    size="sm"
+                                                    role="combobox"
+                                                    aria-expanded={participantCountryOpen}
+                                                    className="h-9 w-full justify-between text-xs sm:w-[180px]"
+                                                >
+                                                    <span className="truncate">
+                                                        {selectedCountry ? selectedCountry.name : 'All Countries'}
+                                                    </span>
+                                                    <ChevronsUpDown className="h-4 w-4 opacity-50" />
+                                                </Button>
+                                            </PopoverTrigger>
+                                            <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+                                                <Command>
+                                                    <CommandInput placeholder="Search country..." />
+                                                    <CommandEmpty>No country found.</CommandEmpty>
+                                                    <CommandList>
+                                                        <CommandGroup>
+                                                            <CommandItem
+                                                                value="All Countries"
+                                                                onSelect={() => {
+                                                                    setParticipantCountryFilter('all');
+                                                                    setParticipantCountryOpen(false);
+                                                                }}
+                                                            >
+                                                                All Countries
+                                                                <Check
+                                                                    className={cn(
+                                                                        'ml-auto h-4 w-4',
+                                                                        participantCountryFilter === 'all' ? 'opacity-100' : 'opacity-0',
+                                                                    )}
                                                                 />
-                                                            </div>
-                                                            <span>{c.name}</span>
-                                                        </div>
-                                                    </SelectItem>
-                                                ))}
-                                            </SelectContent>
-                                        </Select>
+                                                            </CommandItem>
+                                                            {countries.map((c) => (
+                                                                <CommandItem
+                                                                    key={c.id}
+                                                                    value={`${c.name} ${c.code}`}
+                                                                    onSelect={() => {
+                                                                        setParticipantCountryFilter(String(c.id));
+                                                                        setParticipantCountryOpen(false);
+                                                                    }}
+                                                                    className="gap-2"
+                                                                >
+                                                                    <div className="grid size-5 place-items-center overflow-hidden rounded-md border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-950">
+                                                                        <FlagImage
+                                                                            code={c.code}
+                                                                            name={c.name}
+                                                                            preferredSrc={c.flag_url}
+                                                                            className="h-full w-full object-cover"
+                                                                        />
+                                                                    </div>
+                                                                    <span className="truncate">{c.name}</span>
+                                                                    <Check
+                                                                        className={cn(
+                                                                            'ml-auto h-4 w-4',
+                                                                            participantCountryFilter === String(c.id) ? 'opacity-100' : 'opacity-0',
+                                                                        )}
+                                                                    />
+                                                                </CommandItem>
+                                                            ))}
+                                                        </CommandGroup>
+                                                    </CommandList>
+                                                </Command>
+                                            </PopoverContent>
+                                        </Popover>
 
-                                        <Select value={participantTypeFilter} onValueChange={setParticipantTypeFilter}>
-                                            <SelectTrigger className="w-full sm:w-[200px]">
-                                                <SelectValue placeholder="User Type" />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                <SelectItem value="all">All Types</SelectItem>
-                                                {userTypes.map((u) => (
-                                                    <SelectItem key={u.id} value={String(u.id)}>
-                                                        {u.name}
-                                                    </SelectItem>
-                                                ))}
-                                            </SelectContent>
-                                        </Select>
+                                        <Popover open={participantTypeOpen} onOpenChange={setParticipantTypeOpen}>
+                                            <PopoverTrigger asChild>
+                                                <Button
+                                                    variant="outline"
+                                                    size="sm"
+                                                    role="combobox"
+                                                    aria-expanded={participantTypeOpen}
+                                                    className="h-9 w-full justify-between text-xs sm:w-[170px]"
+                                                >
+                                                    <span className="truncate">{selectedUserType ? selectedUserType.name : 'All Types'}</span>
+                                                    <ChevronsUpDown className="h-4 w-4 opacity-50" />
+                                                </Button>
+                                            </PopoverTrigger>
+                                            <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+                                                <Command>
+                                                    <CommandInput placeholder="Search user type..." />
+                                                    <CommandEmpty>No user type found.</CommandEmpty>
+                                                    <CommandList>
+                                                        <CommandGroup>
+                                                            <CommandItem
+                                                                value="All Types"
+                                                                onSelect={() => {
+                                                                    setParticipantTypeFilter('all');
+                                                                    setParticipantTypeOpen(false);
+                                                                }}
+                                                            >
+                                                                All Types
+                                                                <Check
+                                                                    className={cn(
+                                                                        'ml-auto h-4 w-4',
+                                                                        participantTypeFilter === 'all' ? 'opacity-100' : 'opacity-0',
+                                                                    )}
+                                                                />
+                                                            </CommandItem>
+                                                            {orderedUserTypes.map((u) => (
+                                                                <CommandItem
+                                                                    key={u.id}
+                                                                    value={`${u.name} ${u.slug ?? ''}`.trim()}
+                                                                    onSelect={() => {
+                                                                        setParticipantTypeFilter(String(u.id));
+                                                                        setParticipantTypeOpen(false);
+                                                                    }}
+                                                                >
+                                                                    {u.name}
+                                                                    <Check
+                                                                        className={cn(
+                                                                            'ml-auto h-4 w-4',
+                                                                            participantTypeFilter === String(u.id) ? 'opacity-100' : 'opacity-0',
+                                                                        )}
+                                                                    />
+                                                                </CommandItem>
+                                                            ))}
+                                                        </CommandGroup>
+                                                    </CommandList>
+                                                </Command>
+                                            </PopoverContent>
+                                        </Popover>
 
-                                        <Select value={participantStatusFilter} onValueChange={(v) => setParticipantStatusFilter(v as any)}>
-                                            <SelectTrigger className="w-full sm:w-[160px]">
-                                                <SelectValue placeholder="Status" />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                <SelectItem value="all">All</SelectItem>
-                                                <SelectItem value="active">Active</SelectItem>
-                                                <SelectItem value="inactive">Inactive</SelectItem>
-                                            </SelectContent>
-                                        </Select>
+                                        <Popover open={participantStatusOpen} onOpenChange={setParticipantStatusOpen}>
+                                            <PopoverTrigger asChild>
+                                                <Button
+                                                    variant="outline"
+                                                    size="sm"
+                                                    role="combobox"
+                                                    aria-expanded={participantStatusOpen}
+                                                    className="h-9 w-full justify-between text-xs sm:w-[150px]"
+                                                >
+                                                    <span className="truncate">{selectedStatusLabel}</span>
+                                                    <ChevronsUpDown className="h-4 w-4 opacity-50" />
+                                                </Button>
+                                            </PopoverTrigger>
+                                            <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+                                                <Command>
+                                                    <CommandInput placeholder="Search status..." />
+                                                    <CommandEmpty>No status found.</CommandEmpty>
+                                                    <CommandList>
+                                                        <CommandGroup>
+                                                            {[
+                                                                { value: 'all', label: 'All Statuses' },
+                                                                { value: 'active', label: 'Active' },
+                                                                { value: 'inactive', label: 'Inactive' },
+                                                            ].map((status) => (
+                                                                <CommandItem
+                                                                    key={status.value}
+                                                                    value={status.label}
+                                                                    onSelect={() => {
+                                                                        setParticipantStatusFilter(status.value as any);
+                                                                        setParticipantStatusOpen(false);
+                                                                    }}
+                                                                >
+                                                                    {status.label}
+                                                                    <Check
+                                                                        className={cn(
+                                                                            'ml-auto h-4 w-4',
+                                                                            participantStatusFilter === status.value ? 'opacity-100' : 'opacity-0',
+                                                                        )}
+                                                                    />
+                                                                </CommandItem>
+                                                            ))}
+                                                        </CommandGroup>
+                                                    </CommandList>
+                                                </Command>
+                                            </PopoverContent>
+                                        </Popover>
+
+                                        <Popover open={participantEventOpen} onOpenChange={setParticipantEventOpen}>
+                                            <PopoverTrigger asChild>
+                                                <Button
+                                                    variant="outline"
+                                                    size="sm"
+                                                    role="combobox"
+                                                    aria-expanded={participantEventOpen}
+                                                    className="h-9 w-full justify-between text-xs sm:w-[200px]"
+                                                >
+                                                    <span className="truncate">{selectedEvent ? selectedEvent.title : 'All Events'}</span>
+                                                    <ChevronsUpDown className="h-4 w-4 opacity-50" />
+                                                </Button>
+                                            </PopoverTrigger>
+                                            <PopoverContent className="w-72 max-w-[90vw] p-0" align="start">
+                                                <Command>
+                                                    <CommandInput placeholder="Search event..." />
+                                                    <CommandEmpty>No event found.</CommandEmpty>
+                                                    <CommandList>
+                                                        <CommandGroup>
+                                                            <CommandItem
+                                                                value="All Events"
+                                                                onSelect={() => {
+                                                                    setParticipantEventFilter('all');
+                                                                    setParticipantEventOpen(false);
+                                                                }}
+                                                            >
+                                                                All Events
+                                                                <Check
+                                                                    className={cn(
+                                                                        'ml-auto h-4 w-4',
+                                                                        participantEventFilter === 'all' ? 'opacity-100' : 'opacity-0',
+                                                                    )}
+                                                                />
+                                                            </CommandItem>
+                                                            {normalizedProgrammes.map((event) => {
+                                                                const phaseLabel =
+                                                                    event.phase === 'ongoing'
+                                                                        ? 'Ongoing'
+                                                                        : event.phase === 'upcoming'
+                                                                          ? 'Upcoming'
+                                                                          : 'Closed';
+                                                                const phaseTone =
+                                                                    event.phase === 'ongoing'
+                                                                        ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-200'
+                                                                        : event.phase === 'upcoming'
+                                                                          ? 'bg-sky-100 text-sky-700 dark:bg-sky-500/20 dark:text-sky-200'
+                                                                          : 'bg-slate-200 text-slate-700 dark:bg-slate-700 dark:text-slate-200';
+                                                                const dateLabel = event.endsAt
+                                                                    ? `${formatDateSafe(event.startsAt)} - ${formatDateSafe(event.endsAt)}`
+                                                                    : formatDateSafe(event.startsAt);
+
+                                                                return (
+                                                                    <CommandItem
+                                                                        key={event.id}
+                                                                        value={event.title}
+                                                                        onSelect={() => {
+                                                                            setParticipantEventFilter(String(event.id));
+                                                                            setParticipantEventOpen(false);
+                                                                        }}
+                                                                        className="flex items-start gap-2"
+                                                                    >
+                                                                        <div className="min-w-0 flex-1">
+                                                                            <div className="truncate font-medium text-slate-900 dark:text-slate-100">
+                                                                                {event.title}
+                                                                            </div>
+                                                                            <div className="text-[11px] text-slate-500 dark:text-slate-400">
+                                                                                {dateLabel}
+                                                                            </div>
+                                                                        </div>
+                                                                        <Badge className={cn('rounded-full px-2 py-0.5 text-[10px]', phaseTone)}>
+                                                                            {phaseLabel}
+                                                                        </Badge>
+                                                                        <Check
+                                                                            className={cn(
+                                                                                'ml-auto h-4 w-4',
+                                                                                participantEventFilter === String(event.id) ? 'opacity-100' : 'opacity-0',
+                                                                            )}
+                                                                        />
+                                                                    </CommandItem>
+                                                                );
+                                                            })}
+                                                        </CommandGroup>
+                                                    </CommandList>
+                                                </Command>
+                                            </PopoverContent>
+                                        </Popover>
                                     </div>
                                 </div>
 
@@ -1715,20 +2090,18 @@ export default function ParticipantPage(props: PageProps) {
                                                             <TableCell>
                                                                 <div className="flex items-center gap-3">
                                                                     <Checkbox
-                                                                        checked={!isChed && selectedParticipantIds.has(p.id)}
-                                                                        disabled={isChed}
+                                                                        checked={selectedParticipantIds.has(p.id)}
                                                                         onCheckedChange={(checked) => {
-                                                                            if (isChed) return;
                                                                             toggleParticipantSelect(p.id, !!checked);
                                                                         }}
-                                                                        aria-label={isChed ? 'CHED user type excluded from printing' : `Select ${p.full_name}`}
+                                                                        aria-label={`Select ${p.full_name}`}
                                                                     />
 
                                                                     <div>
-                                                                        <div className="text-xs text-slate-500">{isChed ? '(N/A - CHED)' : 'Participant ID'}</div>
+                                                                        <div className="text-xs text-slate-500">Participant ID</div>
 
                                                                         <div className="text-xs font-semibold text-slate-900 dark:text-slate-100">
-                                                                            {isChed ? '' : p.display_id ?? '—'}
+                                                                            {p.display_id ?? '—'}
                                                                         </div>
                                                                     </div>
                                                                 </div>
@@ -1756,12 +2129,10 @@ export default function ParticipantPage(props: PageProps) {
                                                                             <Pencil className="mr-2 h-4 w-4" />
                                                                             Edit
                                                                         </DropdownMenuItem>
-                                                                        {!isChed ? (
-                                                                            <DropdownMenuItem onClick={() => openProgrammeManager(p)}>
-                                                                                <CalendarDays className="mr-2 h-4 w-4" />
-                                                                                Joined events
-                                                                            </DropdownMenuItem>
-                                                                        ) : null}
+                                                                        <DropdownMenuItem onClick={() => openProgrammeManager(p)}>
+                                                                            <CalendarDays className="mr-2 h-4 w-4" />
+                                                                            Joined events
+                                                                        </DropdownMenuItem>
                                                                         <DropdownMenuItem onClick={() => toggleParticipantActive(p)}>
                                                                             <BadgeCheck className="mr-2 h-4 w-4" />
                                                                             {p.is_active ? 'Set Inactive' : 'Set Active'}
@@ -1905,17 +2276,18 @@ export default function ParticipantPage(props: PageProps) {
                                         <TableHeader>
                                             <TableRow className="bg-slate-50 dark:bg-slate-900/40">
                                                 <TableHead>User Type</TableHead>
+                                                <TableHead className="w-[90px]">Order</TableHead>
                                                 <TableHead className="w-[160px]">Status</TableHead>
                                                 <TableHead className="w-[80px] text-right">Action</TableHead>
                                             </TableRow>
                                         </TableHeader>
                                         <TableBody>
-                                            {filteredUserTypes.map((u) => {
-                                                const isAdmin = isAdminUserType(u);
-
-                                                return (
+                                            {filteredUserTypes.map((u) => (
                                                     <TableRow key={u.id}>
                                                         <TableCell className="font-medium text-slate-900 dark:text-slate-100">{u.name}</TableCell>
+                                                        <TableCell className="text-slate-600 dark:text-slate-300">
+                                                            {u.sequence_order ?? '—'}
+                                                        </TableCell>
                                                         <TableCell>
                                                             <StatusBadge active={u.is_active} />
                                                         </TableCell>
@@ -1929,9 +2301,7 @@ export default function ParticipantPage(props: PageProps) {
                                                                 <DropdownMenuContent align="end" className="w-44">
                                                                     <DropdownMenuLabel>Actions</DropdownMenuLabel>
                                                                     <DropdownMenuItem
-                                                                        disabled={isAdmin}
                                                                         onClick={() => {
-                                                                            if (isAdmin) return;
                                                                             openEditUserType(u);
                                                                         }}
                                                                     >
@@ -1939,9 +2309,7 @@ export default function ParticipantPage(props: PageProps) {
                                                                         Edit
                                                                     </DropdownMenuItem>
                                                                     <DropdownMenuItem
-                                                                        disabled={isAdmin}
                                                                         onClick={() => {
-                                                                            if (isAdmin) return;
                                                                             toggleUserTypeActive(u);
                                                                         }}
                                                                     >
@@ -1951,9 +2319,7 @@ export default function ParticipantPage(props: PageProps) {
                                                                     <DropdownMenuSeparator />
                                                                     <DropdownMenuItem
                                                                         className="text-red-600 focus:text-red-600"
-                                                                        disabled={isAdmin}
                                                                         onClick={() => {
-                                                                            if (isAdmin) return;
                                                                             requestDelete('userType', u.id, u.name);
                                                                         }}
                                                                     >
@@ -1964,8 +2330,7 @@ export default function ParticipantPage(props: PageProps) {
                                                             </DropdownMenu>
                                                         </TableCell>
                                                     </TableRow>
-                                                );
-                                            })}
+                                            ))}
                                         </TableBody>
                                     </Table>
                                 </div>
@@ -2204,6 +2569,69 @@ export default function ParticipantPage(props: PageProps) {
                                         ) : null}
                                     </div>
 
+                                    <div className="space-y-1.5">
+                                        <div className="text-sm font-medium">Honorific / Title</div>
+                                        <Input
+                                            value={participantForm.data.honorific_title}
+                                            onChange={(e) => participantForm.setData('honorific_title', e.target.value)}
+                                            placeholder="e.g. Mr., Ms., Dr."
+                                        />
+                                    </div>
+
+                                    <div className="space-y-1.5">
+                                        <div className="text-sm font-medium">Honorific (Other)</div>
+                                        <Input
+                                            value={participantForm.data.honorific_other}
+                                            onChange={(e) => participantForm.setData('honorific_other', e.target.value)}
+                                            placeholder="Specify honorific"
+                                        />
+                                    </div>
+
+                                    <div className="space-y-1.5">
+                                        <div className="text-sm font-medium">Given name</div>
+                                        <Input
+                                            value={participantForm.data.given_name}
+                                            onChange={(e) => participantForm.setData('given_name', e.target.value)}
+                                            placeholder="First name"
+                                        />
+                                    </div>
+
+                                    <div className="space-y-1.5">
+                                        <div className="text-sm font-medium">Middle name</div>
+                                        <Input
+                                            value={participantForm.data.middle_name}
+                                            onChange={(e) => participantForm.setData('middle_name', e.target.value)}
+                                            placeholder="Middle name"
+                                        />
+                                    </div>
+
+                                    <div className="space-y-1.5">
+                                        <div className="text-sm font-medium">Family name / Surname</div>
+                                        <Input
+                                            value={participantForm.data.family_name}
+                                            onChange={(e) => participantForm.setData('family_name', e.target.value)}
+                                            placeholder="Surname"
+                                        />
+                                    </div>
+
+                                    <div className="space-y-1.5">
+                                        <div className="text-sm font-medium">Suffix</div>
+                                        <Input
+                                            value={participantForm.data.suffix}
+                                            onChange={(e) => participantForm.setData('suffix', e.target.value)}
+                                            placeholder="e.g. Jr., III"
+                                        />
+                                    </div>
+
+                                    <div className="space-y-1.5">
+                                        <div className="text-sm font-medium">Sex assigned at birth</div>
+                                        <Input
+                                            value={participantForm.data.sex_assigned_at_birth}
+                                            onChange={(e) => participantForm.setData('sex_assigned_at_birth', e.target.value)}
+                                            placeholder="Male or Female"
+                                        />
+                                    </div>
+
                                     <div className="space-y-1.5 sm:col-span-2">
                                         <div className="text-sm font-medium">
                                             Email <span className="text-[11px] font-semibold text-red-600"> *</span>
@@ -2225,44 +2653,98 @@ export default function ParticipantPage(props: PageProps) {
 
                                     <div className="space-y-1.5 sm:col-span-2">
                                         <div className="text-sm font-medium">Contact number</div>
-                                        <Input
-                                            type="tel"
-                                            inputMode="numeric"
-                                            pattern="[0-9]*"
-                                            value={participantForm.data.contact_number}
-                                            onChange={(e) => participantForm.setData('contact_number', e.target.value)}
-                                            onInput={(event) => {
-                                                event.currentTarget.value = event.currentTarget.value.replace(/[^0-9]/g, '');
-                                            }}
-                                            placeholder="e.g. 639123456789"
-                                        />
+                                        <div className="grid gap-2 sm:grid-cols-[160px_1fr]">
+                                            <Input
+                                                value={participantForm.data.contact_country_code}
+                                                onChange={(e) => participantForm.setData('contact_country_code', e.target.value)}
+                                                placeholder="e.g. +63"
+                                            />
+                                            <Input
+                                                type="tel"
+                                                inputMode="numeric"
+                                                pattern="[0-9]*"
+                                                value={participantForm.data.contact_number}
+                                                onChange={(e) => participantForm.setData('contact_number', e.target.value)}
+                                                onInput={(event) => {
+                                                    event.currentTarget.value = event.currentTarget.value.replace(/[^0-9]/g, '');
+                                                }}
+                                                placeholder="e.g. 9123456789"
+                                            />
+                                        </div>
                                         {participantForm.errors.contact_number ? (
                                             <div className="text-xs text-red-600">{participantForm.errors.contact_number}</div>
                                         ) : null}
                                     </div>
 
+                                    <div className="space-y-1.5 sm:col-span-2">
+                                        <div className="text-sm font-medium">Agency / Organization / Institution</div>
+                                        <Input
+                                            value={participantForm.data.organization_name}
+                                            onChange={(e) => participantForm.setData('organization_name', e.target.value)}
+                                            placeholder="Name of organization"
+                                        />
+                                    </div>
+
+                                    <div className="space-y-1.5 sm:col-span-2">
+                                        <div className="text-sm font-medium">Position / Designation</div>
+                                        <Input
+                                            value={participantForm.data.position_title}
+                                            onChange={(e) => participantForm.setData('position_title', e.target.value)}
+                                            placeholder="Job title / role"
+                                        />
+                                    </div>
+
                                     <div className="space-y-1.5">
                                         <div className="text-sm font-medium">Country</div>
-                                        <Select
-                                            value={participantForm.data.country_id}
-                                            onValueChange={(v) => participantForm.setData('country_id', v)}
-                                        >
-                                            <SelectTrigger>
-                                                <SelectValue placeholder="Select country" />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                {countries
-                                                    .filter((c) => c.is_active)
-                                                    .map((c) => (
-                                                        <SelectItem key={c.id} value={String(c.id)}>
-                                                            <div className="flex items-center gap-2">
-                                                                <FlagThumb country={c} size={18} />
-                                                                <span>{c.name}</span>
-                                                            </div>
-                                                        </SelectItem>
-                                                    ))}
-                                            </SelectContent>
-                                        </Select>
+                                        <Popover open={participantFormCountryOpen} onOpenChange={setParticipantFormCountryOpen}>
+                                            <PopoverTrigger asChild>
+                                                <Button
+                                                    variant="outline"
+                                                    role="combobox"
+                                                    aria-expanded={participantFormCountryOpen}
+                                                    className="w-full justify-between"
+                                                >
+                                                    <span className="truncate">
+                                                        {selectedFormCountry ? selectedFormCountry.name : 'Select country'}
+                                                    </span>
+                                                    <ChevronsUpDown className="h-4 w-4 opacity-50" />
+                                                </Button>
+                                            </PopoverTrigger>
+                                            <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+                                                <Command>
+                                                    <CommandInput placeholder="Search country..." />
+                                                    <CommandEmpty>No country found.</CommandEmpty>
+                                                    <CommandList>
+                                                        <CommandGroup>
+                                                            {countries
+                                                                .filter((c) => c.is_active)
+                                                                .map((c) => (
+                                                                    <CommandItem
+                                                                        key={c.id}
+                                                                        value={`${c.name} ${c.code}`}
+                                                                        onSelect={() => {
+                                                                            participantForm.setData('country_id', String(c.id));
+                                                                            setParticipantFormCountryOpen(false);
+                                                                        }}
+                                                                        className="gap-2"
+                                                                    >
+                                                                        <FlagThumb country={c} size={18} />
+                                                                        <span className="truncate">{c.name}</span>
+                                                                        <Check
+                                                                            className={cn(
+                                                                                'ml-auto h-4 w-4',
+                                                                                participantForm.data.country_id === String(c.id)
+                                                                                    ? 'opacity-100'
+                                                                                    : 'opacity-0',
+                                                                            )}
+                                                                        />
+                                                                    </CommandItem>
+                                                                ))}
+                                                        </CommandGroup>
+                                                    </CommandList>
+                                                </Command>
+                                            </PopoverContent>
+                                        </Popover>
                                         {participantForm.errors.country_id ? (
                                             <div className="text-xs text-red-600">{participantForm.errors.country_id}</div>
                                         ) : null}
@@ -2270,27 +2752,67 @@ export default function ParticipantPage(props: PageProps) {
 
                                     <div className="space-y-1.5">
                                         <div className="text-sm font-medium">User type</div>
-                                        <Select
-                                            value={participantForm.data.user_type_id}
-                                            onValueChange={(v) => participantForm.setData('user_type_id', v)}
-                                        >
-                                            <SelectTrigger>
-                                                <SelectValue placeholder="Select type" />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                {userTypes
-                                                    .filter((u) => u.is_active)
-                                                    .map((u) => (
-                                                        <SelectItem key={u.id} value={String(u.id)}>
-                                                            {u.name}
-                                                        </SelectItem>
-                                                    ))}
-                                            </SelectContent>
-                                        </Select>
+                                        <Popover open={participantFormTypeOpen} onOpenChange={setParticipantFormTypeOpen}>
+                                            <PopoverTrigger asChild>
+                                                <Button
+                                                    variant="outline"
+                                                    role="combobox"
+                                                    aria-expanded={participantFormTypeOpen}
+                                                    className="w-full justify-between"
+                                                >
+                                                    <span className="truncate">
+                                                        {selectedFormUserType ? selectedFormUserType.name : 'Select type'}
+                                                    </span>
+                                                    <ChevronsUpDown className="h-4 w-4 opacity-50" />
+                                                </Button>
+                                            </PopoverTrigger>
+                                            <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+                                                <Command>
+                                                    <CommandInput placeholder="Search user type..." />
+                                                    <CommandEmpty>No user type found.</CommandEmpty>
+                                                    <CommandList>
+                                                        <CommandGroup>
+                                                            {orderedUserTypes
+                                                                .map((u) => (
+                                                                    <CommandItem
+                                                                        key={u.id}
+                                                                        value={`${u.name} ${u.slug ?? ''}`.trim()}
+                                                                        onSelect={() => {
+                                                                            participantForm.setData('user_type_id', String(u.id));
+                                                                            setParticipantFormTypeOpen(false);
+                                                                        }}
+                                                                    >
+                                                                        {u.name}
+                                                                        <Check
+                                                                            className={cn(
+                                                                                'ml-auto h-4 w-4',
+                                                                                participantForm.data.user_type_id === String(u.id)
+                                                                                    ? 'opacity-100'
+                                                                                    : 'opacity-0',
+                                                                            )}
+                                                                        />
+                                                                    </CommandItem>
+                                                                ))}
+                                                        </CommandGroup>
+                                                    </CommandList>
+                                                </Command>
+                                            </PopoverContent>
+                                        </Popover>
                                         {participantForm.errors.user_type_id ? (
                                             <div className="text-xs text-red-600">{participantForm.errors.user_type_id}</div>
                                         ) : null}
                                     </div>
+
+                                    {isOtherParticipantType ? (
+                                        <div className="space-y-1.5">
+                                            <div className="text-sm font-medium">Other user type</div>
+                                            <Input
+                                                value={participantForm.data.other_user_type}
+                                                onChange={(event) => participantForm.setData('other_user_type', event.target.value)}
+                                                placeholder="Specify user type"
+                                            />
+                                        </div>
+                                    ) : null}
 
                                     {showFoodRestrictionsField ? (
                                         <div className="rounded-xl border border-slate-200 px-3 py-3 sm:col-span-2 dark:border-slate-800">
@@ -2335,8 +2857,136 @@ export default function ParticipantPage(props: PageProps) {
                                                     );
                                                 })}
                                             </div>
+                                            {participantForm.data.food_restrictions.includes('allergies') ? (
+                                                <div className="mt-3 space-y-1.5">
+                                                    <div className="text-sm font-medium">Allergies (please specify)</div>
+                                                    <Input
+                                                        value={participantForm.data.dietary_allergies}
+                                                        onChange={(e) => participantForm.setData('dietary_allergies', e.target.value)}
+                                                        placeholder="e.g. Nuts, seafood"
+                                                    />
+                                                </div>
+                                            ) : null}
+                                            {participantForm.data.food_restrictions.includes('other') ? (
+                                                <div className="mt-3 space-y-1.5">
+                                                    <div className="text-sm font-medium">Other dietary needs</div>
+                                                    <Input
+                                                        value={participantForm.data.dietary_other}
+                                                        onChange={(e) => participantForm.setData('dietary_other', e.target.value)}
+                                                        placeholder="Specify other dietary preferences"
+                                                    />
+                                                </div>
+                                            ) : null}
                                         </div>
                                     ) : null}
+
+                                    <div className="rounded-xl border border-slate-200 px-3 py-3 sm:col-span-2 dark:border-slate-800">
+                                        <div className="space-y-0.5">
+                                            <div className="text-sm font-medium">Accessibility needs</div>
+                                            <div className="text-xs text-slate-600 dark:text-slate-400">
+                                                Select all applicable accessibility accommodations.
+                                            </div>
+                                        </div>
+                                        <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                                            {ACCESSIBILITY_NEEDS_OPTIONS.map((option) => {
+                                                const checked = participantForm.data.accessibility_needs.includes(option.value);
+
+                                                return (
+                                                    <label
+                                                        key={option.value}
+                                                        className="flex items-center gap-2 rounded-md border border-slate-200 px-2.5 py-2 text-sm dark:border-slate-700"
+                                                    >
+                                                        <Checkbox
+                                                            checked={checked}
+                                                            onCheckedChange={(value) => {
+                                                                const current = participantForm.data.accessibility_needs;
+
+                                                                if (value) {
+                                                                    participantForm.setData(
+                                                                        'accessibility_needs',
+                                                                        current.includes(option.value)
+                                                                            ? current
+                                                                            : [...current, option.value],
+                                                                    );
+                                                                    return;
+                                                                }
+
+                                                                participantForm.setData(
+                                                                    'accessibility_needs',
+                                                                    current.filter((item) => item !== option.value),
+                                                                );
+                                                            }}
+                                                        />
+                                                        <span>{option.label}</span>
+                                                    </label>
+                                                );
+                                            })}
+                                        </div>
+                                        {participantForm.data.accessibility_needs.includes('other') ? (
+                                            <div className="mt-3 space-y-1.5">
+                                                <div className="text-sm font-medium">Other accommodations</div>
+                                                <Input
+                                                    value={participantForm.data.accessibility_other}
+                                                    onChange={(e) => participantForm.setData('accessibility_other', e.target.value)}
+                                                    placeholder="Specify other accommodations"
+                                                />
+                                            </div>
+                                        ) : null}
+                                    </div>
+
+                                    <div className="rounded-xl border border-slate-200 px-3 py-3 sm:col-span-2 dark:border-slate-800">
+                                        <div className="flex items-center justify-between">
+                                            <div>
+                                                <div className="text-sm font-medium">Indigenous Peoples (IP) affiliation</div>
+                                                <div className="text-xs text-slate-600 dark:text-slate-400">
+                                                    Is the participant part of an Indigenous Peoples group?
+                                                </div>
+                                            </div>
+                                            <Switch
+                                                checked={participantForm.data.ip_affiliation}
+                                                onCheckedChange={(value) => participantForm.setData('ip_affiliation', !!value)}
+                                            />
+                                        </div>
+                                        {participantForm.data.ip_affiliation ? (
+                                            <div className="mt-3 space-y-1.5">
+                                                <div className="text-sm font-medium">IP group name</div>
+                                                <Input
+                                                    value={participantForm.data.ip_group_name}
+                                                    onChange={(e) => participantForm.setData('ip_group_name', e.target.value)}
+                                                    placeholder="Specify IP group"
+                                                />
+                                            </div>
+                                        ) : null}
+                                    </div>
+
+                                    <div className="rounded-xl border border-slate-200 px-3 py-3 sm:col-span-2 dark:border-slate-800">
+                                        <div className="text-sm font-medium">Emergency contact information</div>
+                                        <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                                            <Input
+                                                value={participantForm.data.emergency_contact_name}
+                                                onChange={(e) => participantForm.setData('emergency_contact_name', e.target.value)}
+                                                placeholder="Name"
+                                            />
+                                            <Input
+                                                value={participantForm.data.emergency_contact_relationship}
+                                                onChange={(e) =>
+                                                    participantForm.setData('emergency_contact_relationship', e.target.value)
+                                                }
+                                                placeholder="Relationship"
+                                            />
+                                            <Input
+                                                value={participantForm.data.emergency_contact_phone}
+                                                onChange={(e) => participantForm.setData('emergency_contact_phone', e.target.value)}
+                                                placeholder="Phone number"
+                                            />
+                                            <Input
+                                                type="email"
+                                                value={participantForm.data.emergency_contact_email}
+                                                onChange={(e) => participantForm.setData('emergency_contact_email', e.target.value)}
+                                                placeholder="Email address"
+                                            />
+                                        </div>
+                                    </div>
 
                                     <div className="flex items-center justify-between rounded-xl border border-slate-200 px-3 py-3 sm:col-span-2 dark:border-slate-800">
                                         <div className="space-y-0.5">
@@ -2498,6 +3148,24 @@ export default function ParticipantPage(props: PageProps) {
                                     placeholder="e.g. Staff"
                                 />
                                 {userTypeForm.errors.name ? <div className="text-xs text-red-600">{userTypeForm.errors.name}</div> : null}
+                            </div>
+
+                            <div className="space-y-1.5">
+                                <div className="text-sm font-medium">Sequence order</div>
+                                <Input
+                                    type="number"
+                                    min={0}
+                                    value={userTypeForm.data.sequence_order}
+                                    onChange={(e) => userTypeForm.setData('sequence_order', e.target.value)}
+                                    placeholder="e.g. 1"
+                                />
+                                {userTypeForm.errors.sequence_order ? (
+                                    <div className="text-xs text-red-600">{userTypeForm.errors.sequence_order}</div>
+                                ) : (
+                                    <div className="text-xs text-slate-600 dark:text-slate-400">
+                                        Lower numbers appear first in registrant and user type dropdowns.
+                                    </div>
+                                )}
                             </div>
 
                             <div className="flex items-center justify-between rounded-xl border border-slate-200 px-3 py-3 dark:border-slate-800">
