@@ -37,6 +37,11 @@ class TableAssignmentController extends Controller
 
     private function chedIndex(Request $request, string $view)
     {
+        $currentUser = $request->user();
+        $isAdmin = $currentUser && $currentUser->userType &&
+            (strtoupper($currentUser->userType->name ?? '') === 'ADMIN' ||
+            strtoupper($currentUser->userType->slug ?? '') === 'ADMIN');
+
         $events = Programme::query()
             ->orderBy('starts_at')
             ->orderBy('title')
@@ -107,15 +112,17 @@ class TableAssignmentController extends Controller
                 $assignedIds->isNotEmpty(),
                 fn ($query) => $query->whereNotIn('id', $assignedIds)
             )
-            ->where(function ($query) {
-                $query->whereDoesntHave('userType')
-                    ->orWhereHas('userType', function ($subQuery) {
-                        $subQuery->where(function ($nameQuery) {
-                            $nameQuery->whereNull('name')->orWhereRaw("UPPER(name) NOT LIKE 'CHED%'");
-                        })->where(function ($slugQuery) {
-                            $slugQuery->whereNull('slug')->orWhereRaw("UPPER(slug) NOT LIKE 'CHED%'");
+            ->when(! $isAdmin, function ($query) {
+                $query->where(function ($q) {
+                    $q->whereDoesntHave('userType')
+                        ->orWhereHas('userType', function ($subQuery) {
+                            $subQuery->where(function ($nameQuery) {
+                                $nameQuery->whereNull('name')->orWhereRaw("UPPER(name) NOT LIKE 'CHED%'");
+                            })->where(function ($slugQuery) {
+                                $slugQuery->whereNull('slug')->orWhereRaw("UPPER(slug) NOT LIKE 'CHED%'");
+                            });
                         });
-                    });
+                });
             })
             ->orderBy('name')
             ->get()
@@ -276,18 +283,25 @@ class TableAssignmentController extends Controller
             ->findOrFail($validated['participant_table_id']);
         $participantIds = collect($validated['participant_ids'])->unique()->values();
 
+        $currentUser = $request->user();
+        $isAdmin = $currentUser && $currentUser->userType &&
+            (strtoupper($currentUser->userType->name ?? '') === 'ADMIN' ||
+            strtoupper($currentUser->userType->slug ?? '') === 'ADMIN');
+
         $eligibleIds = User::query()
             ->whereIn('id', $participantIds)
             ->whereHas('joinedProgrammes', fn ($query) => $query->where('programmes.id', $validated['programme_id']))
-            ->where(function ($query) {
-                $query->whereDoesntHave('userType')
-                    ->orWhereHas('userType', function ($subQuery) {
-                        $subQuery->where(function ($nameQuery) {
-                            $nameQuery->whereNull('name')->orWhereRaw("UPPER(name) NOT LIKE 'CHED%'");
-                        })->where(function ($slugQuery) {
-                            $slugQuery->whereNull('slug')->orWhereRaw("UPPER(slug) NOT LIKE 'CHED%'");
+            ->when(! $isAdmin, function ($query) {
+                $query->where(function ($q) {
+                    $q->whereDoesntHave('userType')
+                        ->orWhereHas('userType', function ($subQuery) {
+                            $subQuery->where(function ($nameQuery) {
+                                $nameQuery->whereNull('name')->orWhereRaw("UPPER(name) NOT LIKE 'CHED%'");
+                            })->where(function ($slugQuery) {
+                                $slugQuery->whereNull('slug')->orWhereRaw("UPPER(slug) NOT LIKE 'CHED%'");
+                            });
                         });
-                    });
+                });
             })
             ->pluck('id');
 
