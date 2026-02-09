@@ -8,9 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Separator } from '@/components/ui/separator';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Checkbox } from '@/components/ui/checkbox';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import {
     Command,
@@ -21,7 +19,7 @@ import {
     CommandList,
 } from '@/components/ui/command';
 import { toast } from 'sonner';
-import { CheckCircle2, Plus, Users2, XCircle, Table as TableIcon, Check, ChevronsUpDown } from 'lucide-react';
+import { Plus, Users2, XCircle, Table as TableIcon, Check, ChevronsUpDown, Search, Wand2 } from 'lucide-react';
 
 type Country = {
     id: number;
@@ -270,15 +268,7 @@ export default function TableAssignmenyPage(props: PageProps) {
         capacity: '',
     });
 
-    const assignmentForm = useForm({
-        programme_id: initialEventId,
-        participant_table_id: '',
-        participant_ids: [] as number[],
-    });
-
     const [selectedEventId, setSelectedEventId] = React.useState<string>(initialEventId);
-    const [selectedTableId, setSelectedTableId] = React.useState<string>('');
-    const [selectedParticipantIds, setSelectedParticipantIds] = React.useState<Set<number>>(new Set());
     const [capacityDrafts, setCapacityDrafts] = React.useState<Record<number, string>>({});
     const [tableNumberDrafts, setTableNumberDrafts] = React.useState<Record<number, string>>({});
     const [seatNumberDrafts, setSeatNumberDrafts] = React.useState<Record<number, string>>({});
@@ -311,36 +301,11 @@ export default function TableAssignmenyPage(props: PageProps) {
             return;
         }
 
-        setSelectedTableId('');
-        setSelectedParticipantIds(new Set());
         tableForm.reset('table_number', 'capacity');
         tableForm.clearErrors();
-        assignmentForm.clearErrors();
-
         const destination = isChedAdmin ? chedBasePath : '/table-assignment';
         router.get(destination, { event_id: selectedEventId || undefined }, { preserveScroll: true, preserveState: true, replace: true });
     }, [selectedEventId]);
-
-    const allSelected = participants.length > 0 && participants.every((p) => selectedParticipantIds.has(p.id));
-
-    function toggleParticipant(id: number, checked: boolean) {
-        setSelectedParticipantIds((prev) => {
-            const next = new Set(prev);
-            if (checked) {
-                next.add(id);
-            } else {
-                next.delete(id);
-            }
-            return next;
-        });
-    }
-
-    function toggleAllParticipants(checked: boolean) {
-        setSelectedParticipantIds(() => {
-            if (!checked) return new Set();
-            return new Set(participants.map((p) => p.id));
-        });
-    }
 
     function submitTable(e: React.FormEvent) {
         e.preventDefault();
@@ -361,60 +326,6 @@ export default function TableAssignmenyPage(props: PageProps) {
             },
             onError: () => toast.error('Unable to add table.'),
         });
-    }
-
-    function submitAssignments(e: React.FormEvent) {
-        e.preventDefault();
-        const ids = Array.from(selectedParticipantIds);
-        if (!selectedEventId) {
-            toast.error('Select an event before assigning participants.');
-            return;
-        }
-        if (isEventClosed) {
-            toast.error('This event is closed.');
-            return;
-        }
-        if (!selectedTableId) {
-            toast.error('Select a table to assign participants.');
-            return;
-        }
-        if (ids.length === 0) {
-            toast.error('Select at least one participant.');
-            return;
-        }
-
-        assignmentForm.transform(() => ({
-            programme_id: selectedEventId,
-            participant_table_id: String(Number(selectedTableId)),
-            participant_ids: ids,
-        }));
-
-        assignmentForm.post(ENDPOINTS.assignments.store, {
-            preserveScroll: true,
-            onSuccess: () => {
-                toast.success('Participants assigned to table.');
-                setSelectedParticipantIds(new Set());
-            },
-            onError: () => toast.error('Unable to assign participants.'),
-        });
-    }
-
-    function updateCapacity(tableId: number) {
-        const capacity = Number(capacityDrafts[tableId]);
-        if (!Number.isFinite(capacity) || capacity <= 0) {
-            toast.error('Enter a valid capacity.');
-            return;
-        }
-
-        router.patch(
-            ENDPOINTS.tables.update(tableId),
-            { capacity },
-            {
-                preserveScroll: true,
-                onSuccess: () => toast.success('Table capacity updated.'),
-                onError: () => toast.error('Unable to update capacity.'),
-            },
-        );
     }
 
     function updateTableInfo(tableId: number) {
@@ -447,30 +358,6 @@ export default function TableAssignmenyPage(props: PageProps) {
             onSuccess: () => toast.success('Table deleted.'),
             onError: () => toast.error('Unable to delete table.'),
         });
-    }
-
-    function updateAssignmentSeat(assignmentId: number, tableCapacity: number) {
-        const seatNumber = Number(seatNumberDrafts[assignmentId]);
-
-        if (!Number.isInteger(seatNumber) || seatNumber < 1) {
-            toast.error('Enter a valid seat number.');
-            return;
-        }
-
-        if (seatNumber > tableCapacity) {
-            toast.error(`Seat number must be between 1 and ${tableCapacity}.`);
-            return;
-        }
-
-        router.patch(
-            ENDPOINTS.assignments.update(assignmentId),
-            { seat_number: seatNumber },
-            {
-                preserveScroll: true,
-                onSuccess: () => toast.success('Participant seat number updated.'),
-                onError: () => toast.error('Unable to update seat number.'),
-            },
-        );
     }
 
     function removeAssignment(id: number) {
@@ -588,102 +475,507 @@ export default function TableAssignmenyPage(props: PageProps) {
         </Card>
     );
 
+    // Flatten all assignments across all tables for the unified view
+    const allAssignments = React.useMemo(() => {
+        const result: Array<TableAssignment & { table_number: string; table_id: number; table_capacity: number }> = [];
+        tables.forEach((table) => {
+            table.assignments.forEach((assignment) => {
+                result.push({
+                    ...assignment,
+                    table_number: table.table_number,
+                    table_id: table.id,
+                    table_capacity: table.capacity,
+                });
+            });
+        });
+        return result;
+    }, [tables]);
+
+    // Track inline table reassignment drafts
+    const [tableDrafts, setTableDrafts] = React.useState<Record<number, string>>({});
+
+    React.useEffect(() => {
+        const next: Record<number, string> = {};
+        allAssignments.forEach((a) => {
+            next[a.id] = String(a.table_id);
+        });
+        setTableDrafts(next);
+    }, [allAssignments]);
+
+    // Helper: get CSRF token for fetch calls
+    function getCsrfToken() {
+        return document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') ?? '';
+    }
+
+    // Auto-unassign: batch-remove all excess assignments in one go when capacity is reduced
+    const isAutoUnassigning = React.useRef(false);
+
+    React.useEffect(() => {
+        if (isAutoUnassigning.current) return;
+        if (!selectedEventId || tables.length === 0) return;
+
+        // Collect ALL excess assignment IDs across all over-capacity tables
+        const excessIds: number[] = [];
+        tables.forEach((t) => {
+            if (t.assigned_count > t.capacity) {
+                t.assignments.slice(t.capacity).forEach((a) => excessIds.push(a.id));
+            }
+        });
+        if (excessIds.length === 0) return;
+
+        isAutoUnassigning.current = true;
+        const csrf = getCsrfToken();
+
+        // Delete all excess assignments in parallel, then reload once
+        Promise.all(
+            excessIds.map((id) =>
+                fetch(ENDPOINTS.assignments.destroy(id), {
+                    method: 'DELETE',
+                    headers: { 'X-CSRF-TOKEN': csrf, 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+                }),
+            ),
+        )
+            .then(() => {
+                router.visit(window.location.href, { preserveScroll: true, preserveState: true, onFinish: () => { isAutoUnassigning.current = false; } });
+            })
+            .catch(() => {
+                toast.error('Unable to remove excess assignments.');
+                isAutoUnassigning.current = false;
+            });
+    }, [selectedEventId, tables]);
+
+    // Manual auto-assign: admin clicks a button to distribute all unassigned participants in one go
+    const [autoAssignRunning, setAutoAssignRunning] = React.useState(false);
+
+    function triggerAutoAssign() {
+        if (autoAssignRunning) return;
+        if (!selectedEventId || isEventClosed || participants.length === 0 || tables.length === 0) {
+            toast.error('No unassigned participants or no tables available.');
+            return;
+        }
+
+        // Build assignment plan: distribute participants across tables
+        const plan: Array<{ tableId: number; participantIds: number[] }> = [];
+        let remaining = [...participants];
+
+        for (const table of tables) {
+            if (remaining.length === 0) break;
+            const available = table.capacity - table.assigned_count;
+            if (available <= 0) continue;
+            const batch = remaining.splice(0, available);
+            plan.push({ tableId: table.id, participantIds: batch.map((p) => p.id) });
+        }
+
+        if (plan.length === 0) {
+            toast.error('All tables are full. Increase capacity or add a new table.');
+            return;
+        }
+
+        setAutoAssignRunning(true);
+        const csrf = getCsrfToken();
+
+        // Execute all assignments in parallel, then reload once
+        Promise.all(
+            plan.map(({ tableId, participantIds }) =>
+                fetch(ENDPOINTS.assignments.store, {
+                    method: 'POST',
+                    headers: {
+                        'X-CSRF-TOKEN': csrf,
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest',
+                    },
+                    body: JSON.stringify({
+                        programme_id: selectedEventId,
+                        participant_table_id: String(tableId),
+                        participant_ids: participantIds,
+                    }),
+                }),
+            ),
+        )
+            .then((responses) => {
+                const allOk = responses.every((r) => r.ok);
+                if (allOk) {
+                    toast.success(remaining.length > 0
+                        ? `Assigned ${participants.length - remaining.length} participants. ${remaining.length} remain (tables full).`
+                        : 'All participants have been assigned.');
+                } else {
+                    toast.error('Some assignments failed.');
+                }
+                router.visit(window.location.href, { preserveScroll: true, preserveState: true, onFinish: () => setAutoAssignRunning(false) });
+            })
+            .catch(() => {
+                toast.error('Auto-assignment failed.');
+                setAutoAssignRunning(false);
+            });
+    }
+
+
+    function assignParticipantToTable(participantId: number, tableId: string) {
+        if (!selectedEventId || isEventClosed) return;
+
+        const targetTable = tables.find((t) => String(t.id) === tableId);
+        if (!targetTable) return;
+
+        if (targetTable.assigned_count >= targetTable.capacity) {
+            toast.error(`${targetTable.table_number} is full (${targetTable.assigned_count}/${targetTable.capacity}).`);
+            return;
+        }
+
+        router.post(
+            ENDPOINTS.assignments.store,
+            {
+                programme_id: selectedEventId,
+                participant_table_id: tableId,
+                participant_ids: [participantId],
+            },
+            {
+                preserveScroll: true,
+                onSuccess: () => toast.success('Participant assigned to table.'),
+                onError: () => toast.error('Unable to assign participant.'),
+            },
+        );
+    }
+
+    function reassignToTable(assignmentId: number, newTableId: string) {
+        const current = allAssignments.find((a) => a.id === assignmentId);
+        if (!current || String(current.table_id) === newTableId) return;
+
+        const participantId = current.participant?.id;
+        if (!participantId) return;
+
+        // Check if the target table is full
+        const targetTable = tables.find((t) => String(t.id) === newTableId);
+        if (!targetTable) return;
+
+        if (targetTable.assigned_count >= targetTable.capacity) {
+            toast.error(`${targetTable.table_number} is full (${targetTable.assigned_count}/${targetTable.capacity}). Remove a participant first to free a seat.`);
+            // Revert the dropdown
+            setTableDrafts((prev) => ({ ...prev, [assignmentId]: String(current.table_id) }));
+            return;
+        }
+
+        router.delete(ENDPOINTS.assignments.destroy(assignmentId), {
+            preserveScroll: true,
+            onSuccess: () => {
+                router.post(
+                    ENDPOINTS.assignments.store,
+                    {
+                        programme_id: selectedEventId,
+                        participant_table_id: newTableId,
+                        participant_ids: [participantId],
+                    },
+                    {
+                        preserveScroll: true,
+                        onSuccess: () => toast.success('Participant reassigned to new table.'),
+                        onError: () => toast.error('Unable to reassign participant.'),
+                    },
+                );
+            },
+            onError: () => toast.error('Unable to reassign participant.'),
+        });
+    }
+
+    function updateAssignmentSeatValidated(assignmentId: number, tableCapacity: number, tableId: number) {
+        const seatNumber = Number(seatNumberDrafts[assignmentId]);
+
+        if (!Number.isInteger(seatNumber) || seatNumber < 1) {
+            toast.error('Enter a valid seat number.');
+            return;
+        }
+
+        if (seatNumber > tableCapacity) {
+            toast.error(`Seat number must be between 1 and ${tableCapacity}.`);
+            return;
+        }
+
+        // Check if the seat is already taken by another participant on the same table
+        const currentAssignment = allAssignments.find((a) => a.id === assignmentId);
+        const currentSeat = currentAssignment?.seat_number;
+
+        if (seatNumber === currentSeat) return; // no change
+
+        const conflicting = allAssignments.find(
+            (a) => a.table_id === tableId && a.seat_number === seatNumber && a.id !== assignmentId,
+        );
+
+        if (conflicting && currentSeat) {
+            // Swap: give the conflicting participant the current seat
+            router.patch(
+                ENDPOINTS.assignments.update(conflicting.id),
+                { seat_number: currentSeat },
+                {
+                    preserveScroll: true,
+                    onSuccess: () => {
+                        // Now update the original assignment
+                        router.patch(
+                            ENDPOINTS.assignments.update(assignmentId),
+                            { seat_number: seatNumber },
+                            {
+                                preserveScroll: true,
+                                onSuccess: () => toast.success(`Swapped seats: #${currentSeat} ↔ #${seatNumber}.`),
+                                onError: () => toast.error('Unable to complete seat swap.'),
+                            },
+                        );
+                    },
+                    onError: () => toast.error('Unable to swap seats.'),
+                },
+            );
+            return;
+        }
+
+        if (conflicting) {
+            toast.error(`Seat #${seatNumber} is already taken on this table.`);
+            return;
+        }
+
+        router.patch(
+            ENDPOINTS.assignments.update(assignmentId),
+            { seat_number: seatNumber },
+            {
+                preserveScroll: true,
+                onSuccess: () => toast.success('Seat number updated.'),
+                onError: () => toast.error('Unable to update seat number.'),
+            },
+        );
+    }
+
+    // Check if any table still has room — used to label unassigned rows
+    const hasAvailableCapacity = tables.some((t) => t.capacity - t.assigned_count > 0);
+
+    // Total counts for display
+    const totalParticipants = allAssignments.length + participants.length;
+    const totalCapacity = tables.reduce((sum, t) => sum + t.capacity, 0);
+
+    // Search & filter state
+    const [searchQuery, setSearchQuery] = React.useState('');
+    const [tableFilter, setTableFilter] = React.useState<string>('all'); // 'all' | 'not_assigned' | table id
+
+    const filteredAssignments = React.useMemo(() => {
+        const q = searchQuery.toLowerCase().trim();
+        return allAssignments.filter((a) => {
+            // Table filter
+            if (tableFilter !== 'all' && tableFilter !== 'not_assigned') {
+                if (String(a.table_id) !== tableFilter) return false;
+            }
+            if (tableFilter === 'not_assigned') return false; // hide assigned when filtering "Not Assigned"
+            // Search query
+            if (!q) return true;
+            const name = (a.participant?.full_name ?? '').toLowerCase();
+            const role = (a.participant?.user_type?.name ?? '').toLowerCase();
+            const table = a.table_number.toLowerCase();
+            return name.includes(q) || role.includes(q) || table.includes(q);
+        });
+    }, [allAssignments, searchQuery, tableFilter]);
+
+    const filteredParticipants = React.useMemo(() => {
+        const q = searchQuery.toLowerCase().trim();
+        return participants.filter((p) => {
+            // Table filter — show unassigned only when 'all' or 'not_assigned'
+            if (tableFilter !== 'all' && tableFilter !== 'not_assigned') return false;
+            // Search query
+            if (!q) return true;
+            const name = p.full_name.toLowerCase();
+            const role = (p.user_type?.name ?? '').toLowerCase();
+            return name.includes(q) || role.includes(q);
+        });
+    }, [participants, searchQuery, tableFilter]);
+
     const assignParticipantsCard = (
         <Card>
             <CardHeader>
-                <CardTitle className="text-base">Assign Participants</CardTitle>
-                <CardDescription>Select a table and choose participants to assign.</CardDescription>
-            </CardHeader>
-            <CardContent>
-                <form onSubmit={submitAssignments} className="space-y-4">
-                    <div className="grid gap-4 md:grid-cols-[220px,1fr]">
-                        <div className="space-y-1">
-                            <label className="text-sm font-medium text-slate-700 dark:text-slate-200">Table <span className="text-[11px] font-semibold text-red-600"> *</span></label>
-                            <SearchableDropdown
-                                value={selectedTableId}
-                                onValueChange={(v) => setSelectedTableId(v === 'none' ? '' : v)}
-                                placeholder="Choose table"
-                                searchPlaceholder="Search tables..."
-                                emptyText="No tables found."
-                                disabled={tables.length === 0 || !selectedEventId}
-                                items={
-                                    tables.length === 0
-                                        ? [{ value: 'none', label: 'No tables yet', disabled: true }]
-                                        : [
-                                              { value: '', label: 'Clear selection' },
-                                              ...tables.map((table) => ({
-                                                  value: String(table.id),
-                                                  label: `${table.table_number} (${table.assigned_count}/${table.capacity})`,
-                                                  description:
-                                                      table.capacity - table.assigned_count > 0
-                                                          ? `${table.capacity - table.assigned_count} seats left`
-                                                          : 'Full',
-                                              })),
-                                          ]
-                                }
-                            />
-
-                            {assignmentForm.errors.participant_table_id ? (
-                                <p className="text-xs text-rose-500">{assignmentForm.errors.participant_table_id}</p>
-                            ) : null}
-                        </div>
-                        <div className="flex items-end">
-                            <Button
-                                type="submit"
-                                disabled={assignmentForm.processing || isEventClosed}
-                                className={cn('w-full sm:w-auto', PRIMARY_BTN)}
-                            >
-                                <CheckCircle2 className="mr-2 h-4 w-4" />
-                                Assign selected
-                            </Button>
-                        </div>
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                        <CardTitle className="text-base">Assign Participants</CardTitle>
+                        <CardDescription>Manage table assignments, seat numbers, and track seating.</CardDescription>
                     </div>
-
-                    <Separator />
-
-                    <div className="flex items-center justify-between text-sm text-slate-600 dark:text-slate-400">
-                        <div className="flex items-center gap-2">
-                            <Users2 className="h-4 w-4" />
-                            {participants.length} participants not yet assigned
-                        </div>
-                        <div>{selectedParticipantIds.size} selected</div>
-                    </div>
-                    {assignmentForm.errors.participant_ids ? (
-                        <p className="text-xs text-rose-500">{assignmentForm.errors.participant_ids}</p>
+                    {participants.length > 0 && !isEventClosed ? (
+                        <Button
+                            type="button"
+                            size="sm"
+                            className={cn(PRIMARY_BTN)}
+                            onClick={triggerAutoAssign}
+                            disabled={autoAssignRunning || !hasAvailableCapacity}
+                        >
+                            <Wand2 className="mr-2 h-4 w-4" />
+                            {autoAssignRunning ? 'Assigning...' : 'Auto-assign'}
+                        </Button>
                     ) : null}
+                </div>
+            </CardHeader>
+            <CardContent className="space-y-6">
+                {/* Summary bar */}
+                <div className="flex flex-wrap items-center gap-4 text-sm">
+                    <div className="flex items-center gap-2 text-slate-600 dark:text-slate-400">
+                        <Users2 className="h-4 w-4" />
+                        <span>{totalParticipants} total participant(s)</span>
+                    </div>
+                    <Badge className={allAssignments.length === totalParticipants ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}>
+                        {allAssignments.length} assigned
+                    </Badge>
+                    {participants.length > 0 ? (
+                        <Badge className="bg-slate-100 text-slate-600">
+                            {participants.length} not assigned
+                        </Badge>
+                    ) : null}
+                    <span className="text-xs text-slate-500">
+                        Capacity: {allAssignments.length}/{totalCapacity} across {tables.length} table(s)
+                    </span>
+                </div>
 
-                    <div className="overflow-hidden rounded-lg border border-slate-200 dark:border-slate-800">
-                        <Table>
-                            <TableHeader>
-                                <TableRow className="bg-slate-50 dark:bg-slate-900/40">
-                                    <TableHead className="w-[48px]">
-                                        <Checkbox
-                                            checked={allSelected}
-                                            onCheckedChange={(checked) => toggleAllParticipants(Boolean(checked))}
-                                        />
-                                    </TableHead>
-                                    <TableHead>Participant</TableHead>
-                                    <TableHead className="w-[180px]">Role</TableHead>
+                {/* Search & filter bar */}
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+                    <div className="relative flex-1">
+                        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                        <Input
+                            type="text"
+                            placeholder="Search by name, role, or table..."
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                            className="pl-9"
+                        />
+                    </div>
+                    <div className="w-full sm:w-[200px]">
+                        <SearchableDropdown
+                            value={tableFilter}
+                            onValueChange={setTableFilter}
+                            placeholder="Filter by table"
+                            searchPlaceholder="Search tables..."
+                            emptyText="No tables."
+                            buttonClassName="h-9"
+                            items={[
+                                { value: 'all', label: 'All tables' },
+                                { value: 'not_assigned', label: 'Not Assigned' },
+                                ...tables.map((t) => ({
+                                    value: String(t.id),
+                                    label: t.table_number,
+                                    description: `${t.assigned_count}/${t.capacity} seats`,
+                                })),
+                            ]}
+                        />
+                    </div>
+                </div>
+
+                {/* All assignments table */}
+                <div className="overflow-hidden rounded-lg border border-slate-200 dark:border-slate-800">
+                    <Table>
+                        <TableHeader>
+                            <TableRow className="bg-slate-50 dark:bg-slate-900/40">
+                                <TableHead>Participant</TableHead>
+                                <TableHead className="w-[180px]">Table</TableHead>
+                                <TableHead className="w-[110px]">Seat no.</TableHead>
+                                <TableHead className="w-[140px]">Role</TableHead>
+                                <TableHead className="w-[180px]">Assigned at</TableHead>
+                                <TableHead className="w-[80px] text-right">Action</TableHead>
+                            </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                            {filteredAssignments.length === 0 && filteredParticipants.length === 0 ? (
+                                <TableRow>
+                                    <TableCell colSpan={6} className="py-6 text-center text-sm text-slate-500">
+                                        {searchQuery || tableFilter !== 'all'
+                                            ? 'No participants match your search or filter.'
+                                            : 'No participants for this event.'}
+                                    </TableCell>
                                 </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                                {participants.length === 0 ? (
-                                    <TableRow>
-                                        <TableCell colSpan={3} className="py-6 text-center text-sm text-slate-500">
-                                            All participants are assigned to tables.
-                                        </TableCell>
-                                    </TableRow>
-                                ) : (
-                                    participants.map((participant) => (
-                                        <TableRow key={participant.id}>
+                            ) : (
+                                <>
+                                    {/* Assigned participants */}
+                                    {filteredAssignments.map((assignment) => (
+                                        <TableRow key={`assigned-${assignment.id}`}>
                                             <TableCell>
-                                                <Checkbox
-                                                    checked={selectedParticipantIds.has(participant.id)}
-                                                    onCheckedChange={(checked) =>
-                                                        toggleParticipant(participant.id, Boolean(checked))
-                                                    }
+                                                <div className="flex items-center gap-3">
+                                                    {assignment.participant?.country ? (
+                                                        <FlagThumb
+                                                            country={assignment.participant.country}
+                                                            size={22}
+                                                        />
+                                                    ) : null}
+                                                    <div className="min-w-0">
+                                                        <div className="truncate font-medium text-slate-900 dark:text-slate-100">
+                                                            {assignment.participant?.full_name ?? 'Participant removed'}
+                                                        </div>
+                                                        <div className="text-xs text-slate-500">
+                                                            {assignment.participant?.country?.name ?? 'Country unavailable'}
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </TableCell>
+                                            <TableCell>
+                                                <SearchableDropdown
+                                                    value={tableDrafts[assignment.id] ?? String(assignment.table_id)}
+                                                    onValueChange={(v) => {
+                                                        setTableDrafts((prev) => ({ ...prev, [assignment.id]: v }));
+                                                        reassignToTable(assignment.id, v);
+                                                    }}
+                                                    placeholder="Table"
+                                                    searchPlaceholder="Search tables..."
+                                                    emptyText="No tables."
+                                                    disabled={isEventClosed}
+                                                    buttonClassName="h-8 text-xs"
+                                                    items={tables.map((table) => {
+                                                        const left = table.capacity - table.assigned_count;
+                                                        return {
+                                                            value: String(table.id),
+                                                            label: table.table_number,
+                                                            description: left > 0 ? `${left} seats left` : 'Full',
+                                                        };
+                                                    })}
                                                 />
                                             </TableCell>
+                                            <TableCell>
+                                                <div className="flex items-center gap-2">
+                                                    <Input
+                                                        type="number"
+                                                        min={1}
+                                                        max={assignment.table_capacity}
+                                                        value={seatNumberDrafts[assignment.id] ?? ''}
+                                                        onChange={(e) =>
+                                                            setSeatNumberDrafts((prev) => ({
+                                                                ...prev,
+                                                                [assignment.id]: e.target.value,
+                                                            }))
+                                                        }
+                                                        className="h-8 w-20"
+                                                        disabled={isEventClosed}
+                                                    />
+                                                    <Button
+                                                        type="button"
+                                                        size="sm"
+                                                        variant="outline"
+                                                        onClick={() => updateAssignmentSeatValidated(assignment.id, assignment.table_capacity, assignment.table_id)}
+                                                        disabled={isEventClosed}
+                                                    >
+                                                        Save
+                                                    </Button>
+                                                </div>
+                                            </TableCell>
+                                            <TableCell>
+                                                <Badge variant="secondary">
+                                                    {assignment.participant?.user_type?.name ?? 'Unassigned role'}
+                                                </Badge>
+                                            </TableCell>
+                                            <TableCell className="text-slate-700 dark:text-slate-300">
+                                                {formatDateTime(assignment.assigned_at)}
+                                            </TableCell>
+                                            <TableCell className="text-right">
+                                                <Button
+                                                    type="button"
+                                                    size="sm"
+                                                    variant="ghost"
+                                                    onClick={() => removeAssignment(assignment.id)}
+                                                    aria-label="Remove participant"
+                                                    disabled={isEventClosed}
+                                                >
+                                                    <XCircle className="h-4 w-4 text-rose-500" />
+                                                </Button>
+                                            </TableCell>
+                                        </TableRow>
+                                    ))}
+
+                                    {/* Unassigned participants */}
+                                    {filteredParticipants.map((participant) => (
+                                        <TableRow key={`unassigned-${participant.id}`}>
                                             <TableCell>
                                                 <div className="flex items-center gap-3">
                                                     {participant.country ? (
@@ -700,183 +992,48 @@ export default function TableAssignmenyPage(props: PageProps) {
                                                 </div>
                                             </TableCell>
                                             <TableCell>
+                                                <SearchableDropdown
+                                                    value=""
+                                                    onValueChange={(v) => {
+                                                        if (v) assignParticipantToTable(participant.id, v);
+                                                    }}
+                                                    placeholder="Select table"
+                                                    searchPlaceholder="Search tables..."
+                                                    emptyText="No tables."
+                                                    disabled={isEventClosed}
+                                                    buttonClassName="h-8 text-xs"
+                                                    items={tables.map((table) => {
+                                                        const left = table.capacity - table.assigned_count;
+                                                        return {
+                                                            value: String(table.id),
+                                                            label: table.table_number,
+                                                            description: left > 0 ? `${left} seats left` : 'Full',
+                                                            disabled: left <= 0,
+                                                        };
+                                                    })}
+                                                />
+                                            </TableCell>
+                                            <TableCell>
+                                                <span className="text-xs text-slate-400">—</span>
+                                            </TableCell>
+                                            <TableCell>
                                                 <Badge variant="secondary">
                                                     {participant.user_type?.name ?? 'Unassigned role'}
                                                 </Badge>
                                             </TableCell>
+                                            <TableCell>
+                                                <span className="text-xs text-slate-400">—</span>
+                                            </TableCell>
+                                            <TableCell />
                                         </TableRow>
-                                    ))
-                                )}
-                            </TableBody>
-                        </Table>
-                    </div>
-                </form>
+                                    ))}
+                                </>
+                            )}
+                        </TableBody>
+                    </Table>
+                </div>
             </CardContent>
         </Card>
-    );
-
-    const tablesAssignmentsSection = (
-        <div className="space-y-4">
-            <div className="flex items-center justify-between">
-                <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Tables & assignments</h2>
-                <span className="text-sm text-slate-500">{tables.length} tables</span>
-            </div>
-
-            {tables.length === 0 ? (
-                <Card>
-                    <CardContent className="py-10 text-center text-sm text-slate-500">
-                        No tables created yet. Add a table to start assigning participants.
-                    </CardContent>
-                </Card>
-            ) : (
-                <div className="grid gap-6 lg:grid-cols-2">
-                    {tables.map((table) => {
-                        const available = table.capacity - table.assigned_count;
-                        return (
-                            <Card key={table.id}>
-                                <CardHeader className="flex flex-row items-start justify-between gap-4">
-                                    <div>
-                                        <CardTitle className="text-base">{table.table_number}</CardTitle>
-                                        <CardDescription>
-                                            {table.assigned_count} of {table.capacity} seats occupied (seat arrangement auto-numbered)
-                                        </CardDescription>
-                                    </div>
-                                    <Badge
-                                        className={cn(
-                                            available > 0 ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700',
-                                        )}
-                                    >
-                                        {available > 0 ? `${available} seats left` : 'Full'}
-                                    </Badge>
-                                </CardHeader>
-                                <CardContent className="space-y-4">
-                                    <div className="flex items-end gap-3">
-                                        <div className="flex-1 space-y-1">
-                                            <label className="text-xs font-medium text-slate-600 dark:text-slate-300">
-                                                Capacity
-                                            </label>
-                                            <Input
-                                                type="number"
-                                                min={1}
-                                                value={capacityDrafts[table.id] ?? ''}
-                                                onChange={(e) =>
-                                                    setCapacityDrafts((prev) => ({
-                                                        ...prev,
-                                                        [table.id]: e.target.value,
-                                                    }))
-                                                }
-                                            />
-                                        </div>
-                                        <Button type="button" variant="outline" onClick={() => updateCapacity(table.id)}>
-                                            Update
-                                        </Button>
-                                    </div>
-
-                                    <Separator />
-
-                                    <div className="overflow-hidden rounded-lg border border-slate-200 dark:border-slate-800">
-                                        <Table>
-                                            <TableHeader>
-                                                <TableRow className="bg-slate-50 dark:bg-slate-900/40">
-                                                    <TableHead>Participant</TableHead>
-                                                    <TableHead className="w-[110px]">Seat no.</TableHead>
-                                                    <TableHead className="w-[140px]">Role</TableHead>
-                                                    <TableHead className="w-[180px]">Assigned at</TableHead>
-                                                    <TableHead className="w-[80px] text-right">Action</TableHead>
-                                                </TableRow>
-                                            </TableHeader>
-                                            <TableBody>
-                                                {table.assignments.length === 0 ? (
-                                                    <TableRow>
-                                                        <TableCell
-                                                            colSpan={5}
-                                                            className="py-6 text-center text-sm text-slate-500"
-                                                        >
-                                                            No participants assigned yet.
-                                                        </TableCell>
-                                                    </TableRow>
-                                                ) : (
-                                                    table.assignments.map((assignment) => (
-                                                        <TableRow key={assignment.id}>
-                                                            <TableCell>
-                                                                <div className="flex items-center gap-3">
-                                                                    {assignment.participant?.country ? (
-                                                                        <FlagThumb
-                                                                            country={assignment.participant.country}
-                                                                            size={22}
-                                                                        />
-                                                                    ) : null}
-                                                                    <div className="min-w-0">
-                                                                        <div className="truncate font-medium text-slate-900 dark:text-slate-100">
-                                                                            {assignment.participant?.full_name ??
-                                                                                'Participant removed'}
-                                                                        </div>
-                                                                        <div className="text-xs text-slate-500">
-                                                                            {assignment.participant?.country?.name ?? 'Country unavailable'}
-                                                                        </div>
-                                                                    </div>
-                                                                </div>
-                                                            </TableCell>
-                                                            <TableCell>
-                                                                <div className="flex items-center gap-2">
-                                                                    <Input
-                                                                        type="number"
-                                                                        min={1}
-                                                                        max={table.capacity}
-                                                                        value={seatNumberDrafts[assignment.id] ?? ''}
-                                                                        onChange={(e) =>
-                                                                            setSeatNumberDrafts((prev) => ({
-                                                                                ...prev,
-                                                                                [assignment.id]: e.target.value,
-                                                                            }))
-                                                                        }
-                                                                        className="h-8 w-20"
-                                                                        disabled={isEventClosed}
-                                                                    />
-                                                                    <Button
-                                                                        type="button"
-                                                                        size="sm"
-                                                                        variant="outline"
-                                                                        onClick={() => updateAssignmentSeat(assignment.id, table.capacity)}
-                                                                        disabled={isEventClosed}
-                                                                    >
-                                                                        Save
-                                                                    </Button>
-                                                                </div>
-                                                            </TableCell>
-                                                            <TableCell>
-                                                                <Badge variant="secondary">
-                                                                    {assignment.participant?.user_type?.name ?? 'Unassigned role'}
-                                                                </Badge>
-                                                            </TableCell>
-                                                            <TableCell className="text-slate-700 dark:text-slate-300">
-                                                                {formatDateTime(assignment.assigned_at)}
-                                                            </TableCell>
-                                                            <TableCell className="text-right">
-                                                                <Button
-                                                                    type="button"
-                                                                    size="sm"
-                                                                    variant="ghost"
-                                                                    onClick={() => removeAssignment(assignment.id)}
-                                                                    aria-label="Remove participant"
-                                                                    disabled={isEventClosed}
-                                                                >
-                                                                    <XCircle className="h-4 w-4 text-rose-500" />
-                                                                </Button>
-                                                            </TableCell>
-                                                        </TableRow>
-                                                    ))
-                                                )}
-                                            </TableBody>
-                                        </Table>
-                                    </div>
-                                </CardContent>
-                            </Card>
-                        );
-                    })}
-                </div>
-            )}
-        </div>
     );
 
     return (
@@ -980,7 +1137,6 @@ export default function TableAssignmenyPage(props: PageProps) {
                                 </Card>
                                 {assignParticipantsCard}
                             </div>
-                            {tablesAssignmentsSection}
                         </>
                     ) : (
                         <div className="grid gap-6">
@@ -1071,7 +1227,6 @@ export default function TableAssignmenyPage(props: PageProps) {
                             {createTableCard}
                             {assignParticipantsCard}
                         </div>
-                        {tablesAssignmentsSection}
                     </>
                 )}
             </div>
