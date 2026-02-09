@@ -20,7 +20,7 @@ import {
 } from '@/components/ui/command';
 import { toast } from 'sonner';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Plus, Users2, XCircle, Table as TableIcon, Check, ChevronsUpDown, Search, Wand2 } from 'lucide-react';
+import { Plus, Users2, XCircle, Table as TableIcon, Check, ChevronsUpDown, Search, Wand2, ChevronLeft, ChevronRight } from 'lucide-react';
 
 type Country = {
     id: number;
@@ -857,10 +857,10 @@ export default function TableAssignmenyPage(props: PageProps) {
                 {/* Pagination controls & Search bar */}
                 <div className="flex flex-col gap-3">
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-                        <div className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400">
+                        <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
                             <span>Show</span>
                             <Select value={String(perPage)} onValueChange={(v) => { setPerPage(Number(v)); setCurrentPage(1); }}>
-                                <SelectTrigger className="h-9 w-[70px]">
+                                <SelectTrigger className="h-8 w-[60px] text-xs">
                                     <SelectValue />
                                 </SelectTrigger>
                                 <SelectContent>
@@ -872,7 +872,7 @@ export default function TableAssignmenyPage(props: PageProps) {
                             <span>entries</span>
                         </div>
                         {totalFilteredRows > 0 && (
-                            <span className="text-sm text-slate-600 dark:text-slate-400">
+                            <span className="text-xs text-slate-500 dark:text-slate-400">
                                 Showing {Math.min((safePage - 1) * perPage + 1, totalFilteredRows)} to {Math.min(safePage * perPage, totalFilteredRows)} of {totalFilteredRows} entries
                             </span>
                         )}
@@ -1087,15 +1087,16 @@ export default function TableAssignmenyPage(props: PageProps) {
 
                 {/* Page navigation */}
                 {totalFilteredRows > 0 && (
-                    <div className="flex items-center gap-1 pt-4">
+                    <div className="flex items-center gap-1 pt-2">
                         <Button
                             type="button"
                             variant="outline"
                             size="sm"
                             disabled={safePage <= 1}
                             onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-                            className="h-9 px-3"
+                            className="h-8 gap-1 px-2.5 text-xs"
                         >
+                            <ChevronLeft className="h-3.5 w-3.5" />
                             Previous
                         </Button>
                         {Array.from({ length: totalPages }, (_, i) => i + 1)
@@ -1110,7 +1111,7 @@ export default function TableAssignmenyPage(props: PageProps) {
                             }, [])
                             .map((item, idx) =>
                                 item === 'ellipsis' ? (
-                                    <span key={`ellipsis-${idx}`} className="px-2 text-slate-400">...</span>
+                                    <span key={`ellipsis-${idx}`} className="px-1.5 text-xs text-slate-400">...</span>
                                 ) : (
                                     <Button
                                         key={item}
@@ -1118,7 +1119,7 @@ export default function TableAssignmenyPage(props: PageProps) {
                                         variant={item === safePage ? 'default' : 'outline'}
                                         size="sm"
                                         onClick={() => setCurrentPage(item)}
-                                        className={cn('h-9 min-w-[36px] px-3', item === safePage && PRIMARY_BTN)}
+                                        className={cn('h-8 min-w-[32px] px-2.5 text-xs', item === safePage && PRIMARY_BTN)}
                                     >
                                         {item}
                                     </Button>
@@ -1130,9 +1131,10 @@ export default function TableAssignmenyPage(props: PageProps) {
                             size="sm"
                             disabled={safePage >= totalPages}
                             onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-                            className="h-9 px-3"
+                            className="h-8 gap-1 px-2.5 text-xs"
                         >
                             Next
+                            <ChevronRight className="h-3.5 w-3.5" />
                         </Button>
                     </div>
                 )}
@@ -1162,7 +1164,7 @@ export default function TableAssignmenyPage(props: PageProps) {
                         </div>
                     </div>
 
-              
+
                 </div>
 
                 {isChedAdmin ? (
