@@ -19,6 +19,7 @@ import {
     CommandList,
 } from '@/components/ui/command';
 import { toast } from 'sonner';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Plus, Users2, XCircle, Table as TableIcon, Check, ChevronsUpDown, Search, Wand2 } from 'lucide-react';
 
 type Country = {
@@ -747,9 +748,16 @@ export default function TableAssignmenyPage(props: PageProps) {
     const totalParticipants = allAssignments.length + participants.length;
     const totalCapacity = tables.reduce((sum, t) => sum + t.capacity, 0);
 
-    // Search & filter state
+    // Search, filter & pagination state
     const [searchQuery, setSearchQuery] = React.useState('');
     const [tableFilter, setTableFilter] = React.useState<string>('all'); // 'all' | 'not_assigned' | table id
+    const [currentPage, setCurrentPage] = React.useState(1);
+    const [perPage, setPerPage] = React.useState(10);
+
+    // Reset to page 1 when search or filter changes
+    React.useEffect(() => {
+        setCurrentPage(1);
+    }, [searchQuery, tableFilter]);
 
     const filteredAssignments = React.useMemo(() => {
         const q = searchQuery.toLowerCase().trim();
@@ -780,6 +788,29 @@ export default function TableAssignmenyPage(props: PageProps) {
             return name.includes(q) || role.includes(q);
         });
     }, [participants, searchQuery, tableFilter]);
+
+    // Pagination: combine filtered assigned + unassigned into one virtual list, then slice
+    const totalFilteredRows = filteredAssignments.length + filteredParticipants.length;
+    const totalPages = Math.max(1, Math.ceil(totalFilteredRows / perPage));
+    const safePage = Math.min(currentPage, totalPages);
+
+    const paginatedData = React.useMemo(() => {
+        const start = (safePage - 1) * perPage;
+        const end = start + perPage;
+
+        // Slice from assigned first, then unassigned
+        const assignedSliceStart = Math.min(start, filteredAssignments.length);
+        const assignedSliceEnd = Math.min(end, filteredAssignments.length);
+        const pagedAssigned = filteredAssignments.slice(assignedSliceStart, assignedSliceEnd);
+
+        const unassignedNeeded = perPage - pagedAssigned.length;
+        const unassignedOffset = Math.max(0, start - filteredAssignments.length);
+        const pagedUnassigned = unassignedNeeded > 0
+            ? filteredParticipants.slice(unassignedOffset, unassignedOffset + unassignedNeeded)
+            : [];
+
+        return { pagedAssigned, pagedUnassigned };
+    }, [filteredAssignments, filteredParticipants, safePage, perPage]);
 
     const assignParticipantsCard = (
         <Card>
@@ -823,36 +854,57 @@ export default function TableAssignmenyPage(props: PageProps) {
                     </span>
                 </div>
 
-                {/* Search & filter bar */}
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-                    <div className="relative flex-1">
-                        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-                        <Input
-                            type="text"
-                            placeholder="Search by name, role, or table..."
-                            value={searchQuery}
-                            onChange={(e) => setSearchQuery(e.target.value)}
-                            className="pl-9"
-                        />
-                    </div>
-                    <div className="w-full sm:w-[200px]">
-                        <SearchableDropdown
-                            value={tableFilter}
-                            onValueChange={setTableFilter}
-                            placeholder="Filter by table"
-                            searchPlaceholder="Search tables..."
-                            emptyText="No tables."
-                            buttonClassName="h-9"
-                            items={[
-                                { value: 'all', label: 'All tables' },
-                                { value: 'not_assigned', label: 'Not Assigned' },
-                                ...tables.map((t) => ({
-                                    value: String(t.id),
-                                    label: t.table_number,
-                                    description: `${t.assigned_count}/${t.capacity} seats`,
-                                })),
-                            ]}
-                        />
+                {/* Pagination controls & Search bar */}
+                <div className="flex flex-col gap-3">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+                        <div className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400">
+                            <span>Show</span>
+                            <Select value={String(perPage)} onValueChange={(v) => { setPerPage(Number(v)); setCurrentPage(1); }}>
+                                <SelectTrigger className="h-9 w-[70px]">
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {[10, 20, 50, 100, 1000].map((n) => (
+                                        <SelectItem key={n} value={String(n)}>{n}</SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                            <span>entries</span>
+                        </div>
+                        {totalFilteredRows > 0 && (
+                            <span className="text-sm text-slate-600 dark:text-slate-400">
+                                Showing {Math.min((safePage - 1) * perPage + 1, totalFilteredRows)} to {Math.min(safePage * perPage, totalFilteredRows)} of {totalFilteredRows} entries
+                            </span>
+                        )}
+                        <div className="relative flex-1">
+                            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                            <Input
+                                type="text"
+                                placeholder="Search by name, role, or table..."
+                                value={searchQuery}
+                                onChange={(e) => setSearchQuery(e.target.value)}
+                                className="pl-9"
+                            />
+                        </div>
+                        <div className="w-full sm:w-[200px]">
+                            <SearchableDropdown
+                                value={tableFilter}
+                                onValueChange={setTableFilter}
+                                placeholder="Filter by table"
+                                searchPlaceholder="Search tables..."
+                                emptyText="No tables."
+                                buttonClassName="h-9"
+                                items={[
+                                    { value: 'all', label: 'All tables' },
+                                    { value: 'not_assigned', label: 'Not Assigned' },
+                                    ...tables.map((t) => ({
+                                        value: String(t.id),
+                                        label: t.table_number,
+                                        description: `${t.assigned_count}/${t.capacity} seats`,
+                                    })),
+                                ]}
+                            />
+                        </div>
                     </div>
                 </div>
 
@@ -870,7 +922,7 @@ export default function TableAssignmenyPage(props: PageProps) {
                             </TableRow>
                         </TableHeader>
                         <TableBody>
-                            {filteredAssignments.length === 0 && filteredParticipants.length === 0 ? (
+                            {totalFilteredRows === 0 ? (
                                 <TableRow>
                                     <TableCell colSpan={6} className="py-6 text-center text-sm text-slate-500">
                                         {searchQuery || tableFilter !== 'all'
@@ -881,7 +933,7 @@ export default function TableAssignmenyPage(props: PageProps) {
                             ) : (
                                 <>
                                     {/* Assigned participants */}
-                                    {filteredAssignments.map((assignment) => (
+                                    {paginatedData.pagedAssigned.map((assignment) => (
                                         <TableRow key={`assigned-${assignment.id}`}>
                                             <TableCell>
                                                 <div className="flex items-center gap-3">
@@ -974,7 +1026,7 @@ export default function TableAssignmenyPage(props: PageProps) {
                                     ))}
 
                                     {/* Unassigned participants */}
-                                    {filteredParticipants.map((participant) => (
+                                    {paginatedData.pagedUnassigned.map((participant) => (
                                         <TableRow key={`unassigned-${participant.id}`}>
                                             <TableCell>
                                                 <div className="flex items-center gap-3">
@@ -1032,6 +1084,58 @@ export default function TableAssignmenyPage(props: PageProps) {
                         </TableBody>
                     </Table>
                 </div>
+
+                {/* Page navigation */}
+                {totalFilteredRows > 0 && (
+                    <div className="flex items-center gap-1 pt-4">
+                        <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            disabled={safePage <= 1}
+                            onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                            className="h-9 px-3"
+                        >
+                            Previous
+                        </Button>
+                        {Array.from({ length: totalPages }, (_, i) => i + 1)
+                            .filter((p) => {
+                                if (totalPages <= 5) return true;
+                                return p === 1 || p === totalPages || Math.abs(p - safePage) <= 1;
+                            })
+                            .reduce<(number | 'ellipsis')[]>((acc, p, idx, arr) => {
+                                if (idx > 0 && p - (arr[idx - 1] as number) > 1) acc.push('ellipsis');
+                                acc.push(p);
+                                return acc;
+                            }, [])
+                            .map((item, idx) =>
+                                item === 'ellipsis' ? (
+                                    <span key={`ellipsis-${idx}`} className="px-2 text-slate-400">...</span>
+                                ) : (
+                                    <Button
+                                        key={item}
+                                        type="button"
+                                        variant={item === safePage ? 'default' : 'outline'}
+                                        size="sm"
+                                        onClick={() => setCurrentPage(item)}
+                                        className={cn('h-9 min-w-[36px] px-3', item === safePage && PRIMARY_BTN)}
+                                    >
+                                        {item}
+                                    </Button>
+                                ),
+                            )}
+                        <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            disabled={safePage >= totalPages}
+                            onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                            className="h-9 px-3"
+                        >
+                            Next
+                        </Button>
+                    </div>
+                )}
             </CardContent>
         </Card>
     );
