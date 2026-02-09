@@ -12,9 +12,15 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('users', function (Blueprint $table) {
-            $table->foreignId('country_id')->nullable()->after('email')->constrained('countries')->nullOnDelete();
-            $table->foreignId('user_type_id')->nullable()->after('country_id')->constrained('user_types')->nullOnDelete();
-            $table->boolean('is_active')->default(true)->after('user_type_id');
+            if (!Schema::hasColumn('users', 'country_id')) {
+                $table->foreignId('country_id')->nullable()->after('email')->constrained('countries')->nullOnDelete();
+            }
+            if (!Schema::hasColumn('users', 'user_type_id')) {
+                $table->foreignId('user_type_id')->nullable()->after('country_id')->constrained('user_types')->nullOnDelete();
+            }
+            if (!Schema::hasColumn('users', 'is_active')) {
+                $table->boolean('is_active')->default(true)->after('user_type_id');
+            }
         });
     }
 

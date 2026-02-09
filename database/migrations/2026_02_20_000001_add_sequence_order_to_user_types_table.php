@@ -12,7 +12,9 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('user_types', function (Blueprint $table) {
-            $table->unsignedInteger('sequence_order')->default(0)->after('slug');
+            if (!Schema::hasColumn('user_types', 'sequence_order')) {
+                $table->unsignedInteger('sequence_order')->default(0)->after('slug');
+            }
         });
     }
 

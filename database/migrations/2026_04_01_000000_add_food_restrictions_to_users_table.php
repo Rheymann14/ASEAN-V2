@@ -12,7 +12,9 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('users', function (Blueprint $table) {
-            $table->boolean('has_food_restrictions')->default(false)->after('consent_photo_video');
+            if (!Schema::hasColumn('users', 'has_food_restrictions')) {
+                $table->boolean('has_food_restrictions')->default(false)->after('consent_photo_video');
+            }
         });
     }
 

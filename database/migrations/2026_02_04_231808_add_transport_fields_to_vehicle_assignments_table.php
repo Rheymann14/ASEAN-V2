@@ -9,9 +9,15 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('vehicle_assignments', function (Blueprint $table) {
-            $table->foreignId('vehicle_id')->nullable()->constrained('transport_vehicles')->nullOnDelete();
-            $table->foreignId('driver_user_id')->nullable()->constrained('users')->nullOnDelete();
-            $table->boolean('notify_admin')->default(false);
+            if (!Schema::hasColumn('vehicle_assignments', 'vehicle_id')) {
+                $table->foreignId('vehicle_id')->nullable()->constrained('transport_vehicles')->nullOnDelete();
+            }
+            if (!Schema::hasColumn('vehicle_assignments', 'driver_user_id')) {
+                $table->foreignId('driver_user_id')->nullable()->constrained('users')->nullOnDelete();
+            }
+            if (!Schema::hasColumn('vehicle_assignments', 'notify_admin')) {
+                $table->boolean('notify_admin')->default(false);
+            }
         });
     }
 

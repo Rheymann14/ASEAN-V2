@@ -12,7 +12,9 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('users', function (Blueprint $table) {
-            $table->json('food_restrictions')->nullable()->after('has_food_restrictions');
+            if (!Schema::hasColumn('users', 'food_restrictions')) {
+                $table->json('food_restrictions')->nullable()->after('has_food_restrictions');
+            }
         });
     }
 
