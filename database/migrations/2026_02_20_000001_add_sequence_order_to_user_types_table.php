@@ -11,9 +11,9 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::table('users', function (Blueprint $table) {
-            if (!Schema::hasColumn('users', 'has_food_restrictions')) {
-                $table->boolean('has_food_restrictions')->default(false)->after('consent_photo_video');
+        Schema::table('user_types', function (Blueprint $table) {
+            if (!Schema::hasColumn('user_types', 'sequence_order')) {
+                $table->unsignedInteger('sequence_order')->default(0)->after('slug');
             }
         });
     }
@@ -23,8 +23,8 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::table('users', function (Blueprint $table) {
-            $table->dropColumn('has_food_restrictions');
+        Schema::table('user_types', function (Blueprint $table) {
+            $table->dropColumn('sequence_order');
         });
     }
 };

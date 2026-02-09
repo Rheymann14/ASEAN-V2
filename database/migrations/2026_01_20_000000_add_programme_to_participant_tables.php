@@ -10,24 +10,29 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('participant_tables', function (Blueprint $table) {
-            $table->dropUnique('participant_tables_table_number_unique');
-            $table->foreignId('programme_id')->nullable()->after('id')->constrained('programmes')->nullOnDelete();
-            $table->unique(['programme_id', 'table_number'], 'participant_tables_programme_table_unique');
+            if (!Schema::hasColumn('participant_tables', 'programme_id')) {
+                $table->dropUnique('participant_tables_table_number_unique');
+                $table->foreignId('programme_id')->nullable()->after('id')->constrained('programmes')->nullOnDelete();
+                $table->unique(['programme_id', 'table_number'], 'participant_tables_programme_table_unique');
+            }
         });
 
         Schema::table('participant_table_assignments', function (Blueprint $table) {
-            $table->dropForeign(['user_id']);
-            $table->foreignId('programme_id')->nullable()->after('id')->constrained('programmes')->nullOnDelete();
-            $table->dropUnique('pt_assign_user_unique');
-            $table->index('user_id', 'pt_assign_user_index');
-            $table->unique(['programme_id', 'user_id'], 'pt_assign_programme_user_unique');
-            $table->foreign('user_id')->references('id')->on('users')->cascadeOnDelete();
+            if (!Schema::hasColumn('participant_table_assignments', 'programme_id')) {
+                $table->dropForeign(['user_id']);
+                $table->foreignId('programme_id')->nullable()->after('id')->constrained('programmes')->nullOnDelete();
+                $table->dropUnique('pt_assign_user_unique');
+                $table->index('user_id', 'pt_assign_user_index');
+                $table->unique(['programme_id', 'user_id'], 'pt_assign_programme_user_unique');
+                $table->foreign('user_id')->references('id')->on('users')->cascadeOnDelete();
+            }
         });
 
         DB::statement('
             UPDATE participant_table_assignments
             INNER JOIN participant_tables ON participant_tables.id = participant_table_assignments.participant_table_id
             SET participant_table_assignments.programme_id = participant_tables.programme_id
+            WHERE participant_table_assignments.programme_id IS NULL
         ');
     }
 

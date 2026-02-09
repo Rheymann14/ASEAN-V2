@@ -9,8 +9,12 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('feedback', function (Blueprint $table) {
-            $table->foreignId('participant_id')->nullable()->after('id')->constrained('users')->nullOnDelete();
-            $table->foreignId('programme_id')->nullable()->after('participant_id')->constrained('programmes')->nullOnDelete();
+            if (!Schema::hasColumn('feedback', 'participant_id')) {
+                $table->foreignId('participant_id')->nullable()->after('id')->constrained('users')->nullOnDelete();
+            }
+            if (!Schema::hasColumn('feedback', 'programme_id')) {
+                $table->foreignId('programme_id')->nullable()->after('participant_id')->constrained('programmes')->nullOnDelete();
+            }
         });
     }
 

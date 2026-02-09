@@ -12,8 +12,12 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('users', function (Blueprint $table) {
-            $table->boolean('consent_contact_sharing')->default(false)->after('is_active');
-            $table->boolean('consent_photo_video')->default(false)->after('consent_contact_sharing');
+            if (!Schema::hasColumn('users', 'consent_contact_sharing')) {
+                $table->boolean('consent_contact_sharing')->default(false)->after('is_active');
+            }
+            if (!Schema::hasColumn('users', 'consent_photo_video')) {
+                $table->boolean('consent_photo_video')->default(false)->after('consent_contact_sharing');
+            }
         });
     }
 

@@ -12,9 +12,15 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('programmes', function (Blueprint $table) {
-            $table->string('signatory_name')->nullable()->after('pdf_url');
-            $table->string('signatory_title')->nullable()->after('signatory_name');
-            $table->string('signatory_signature_url')->nullable()->after('signatory_title');
+            if (!Schema::hasColumn('programmes', 'signatory_name')) {
+                $table->string('signatory_name')->nullable()->after('pdf_url');
+            }
+            if (!Schema::hasColumn('programmes', 'signatory_title')) {
+                $table->string('signatory_title')->nullable()->after('signatory_name');
+            }
+            if (!Schema::hasColumn('programmes', 'signatory_signature_url')) {
+                $table->string('signatory_signature_url')->nullable()->after('signatory_title');
+            }
         });
     }
 

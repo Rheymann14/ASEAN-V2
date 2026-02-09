@@ -89,7 +89,7 @@ class FortifyServiceProvider extends ServiceProvider
                             ->replace(['_', '-'], ' ')
                             ->trim();
 
-                        if ($roleValue === 'CHED') {
+                        if ($roleValue === 'ADMIN') {
                             return redirect('/dashboard');
                         }
 
@@ -154,9 +154,12 @@ class FortifyServiceProvider extends ServiceProvider
                 ]),
             'registrantTypes' => UserType::query()
                 ->where('is_active', true)
+                ->where('slug', '!=', 'admin')
+                ->where('name', '!=', 'Admin')
                 ->where('slug', '!=', 'ched')
                 ->where('name', '!=', 'CHED')
-                ->orderBy('name')
+                ->orderBy('sequence_order')
+                ->orderBy('id')
                 ->get()
                 ->map(fn (UserType $type) => [
                     'id' => $type->id,

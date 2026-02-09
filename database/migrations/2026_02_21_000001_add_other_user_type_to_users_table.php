@@ -6,25 +6,19 @@ use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
-    /**
-     * Run the migrations.
-     */
     public function up(): void
     {
         Schema::table('users', function (Blueprint $table) {
-            if (!Schema::hasColumn('users', 'has_food_restrictions')) {
-                $table->boolean('has_food_restrictions')->default(false)->after('consent_photo_video');
+            if (!Schema::hasColumn('users', 'other_user_type')) {
+                $table->string('other_user_type')->nullable()->after('user_type_id');
             }
         });
     }
 
-    /**
-     * Reverse the migrations.
-     */
     public function down(): void
     {
         Schema::table('users', function (Blueprint $table) {
-            $table->dropColumn('has_food_restrictions');
+            $table->dropColumn('other_user_type');
         });
     }
 };
