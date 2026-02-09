@@ -91,6 +91,12 @@ class TableAssignmentController extends Controller
                                                 'slug' => $participant->userType->slug,
                                             ]
                                             : null,
+                                        'has_food_restrictions' => $participant->has_food_restrictions ?? false,
+                                        'food_restrictions' => $participant->food_restrictions ?? [],
+                                        'dietary_allergies' => $participant->dietary_allergies,
+                                        'dietary_other' => $participant->dietary_other,
+                                        'accessibility_needs' => $participant->accessibility_needs ?? [],
+                                        'accessibility_other' => $participant->accessibility_other,
                                     ]
                                     : null,
                             ];
@@ -145,6 +151,12 @@ class TableAssignmentController extends Controller
                             'slug' => $participant->userType->slug,
                         ]
                         : null,
+                    'has_food_restrictions' => $participant->has_food_restrictions ?? false,
+                    'food_restrictions' => $participant->food_restrictions ?? [],
+                    'dietary_allergies' => $participant->dietary_allergies,
+                    'dietary_other' => $participant->dietary_other,
+                    'accessibility_needs' => $participant->accessibility_needs ?? [],
+                    'accessibility_other' => $participant->accessibility_other,
                 ];
             });
 

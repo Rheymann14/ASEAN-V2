@@ -20,7 +20,7 @@ import {
 } from '@/components/ui/command';
 import { toast } from 'sonner';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Plus, Users2, XCircle, Table as TableIcon, Check, ChevronsUpDown, Search, Wand2, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Plus, Users2, XCircle, Table as TableIcon, Check, ChevronsUpDown, Search, Wand2, ChevronLeft, ChevronRight, ChevronDown } from 'lucide-react';
 
 type Country = {
     id: number;
@@ -40,6 +40,12 @@ type Participant = {
     full_name: string;
     country?: Country | null;
     user_type?: UserType | null;
+    has_food_restrictions?: boolean;
+    food_restrictions?: string[];
+    dietary_allergies?: string | null;
+    dietary_other?: string | null;
+    accessibility_needs?: string[];
+    accessibility_other?: string | null;
 };
 
 type TableAssignment = {
@@ -90,6 +96,26 @@ const ENDPOINTS = {
 
 const PRIMARY_BTN =
     'bg-[#00359c] text-white hover:bg-[#00359c]/90 focus-visible:ring-[#00359c]/30 dark:bg-[#00359c] dark:hover:bg-[#00359c]/90';
+
+const FOOD_RESTRICTION_OPTIONS = [
+    { value: 'vegetarian', label: 'Vegetarian' },
+    { value: 'vegan', label: 'Vegan' },
+    { value: 'halal', label: 'Halal' },
+    { value: 'kosher', label: 'Kosher' },
+    { value: 'gluten_free', label: 'Gluten-free' },
+    { value: 'lactose_intolerant', label: 'Lactose intolerant' },
+    { value: 'nut_allergy', label: 'Nut allergy' },
+    { value: 'seafood_allergy', label: 'Seafood allergy' },
+    { value: 'allergies', label: 'Allergies' },
+    { value: 'other', label: 'Other' },
+] as const;
+
+const ACCESSIBILITY_NEEDS_OPTIONS = [
+    { value: 'wheelchair_access', label: 'Wheelchair access' },
+    { value: 'sign_language_interpreter', label: 'Sign language interpreter' },
+    { value: 'assistive_technology_support', label: 'Assistive technology support' },
+    { value: 'other', label: 'Other accommodations' },
+] as const;
 
 function formatDateTime(value?: string | null) {
     if (!value) return '—';
@@ -273,6 +299,7 @@ export default function TableAssignmenyPage(props: PageProps) {
     const [capacityDrafts, setCapacityDrafts] = React.useState<Record<number, string>>({});
     const [tableNumberDrafts, setTableNumberDrafts] = React.useState<Record<number, string>>({});
     const [seatNumberDrafts, setSeatNumberDrafts] = React.useState<Record<number, string>>({});
+    const [expandedRowIds, setExpandedRowIds] = React.useState<Set<string>>(new Set());
     const hasHydrated = React.useRef(false);
     const selectedEvent = selectedEventId ? events.find((event) => String(event.id) === selectedEventId) : null;
     const selectedEventPhase = selectedEvent ? resolveEventPhase(selectedEvent, Date.now()) : null;
@@ -812,6 +839,83 @@ export default function TableAssignmenyPage(props: PageProps) {
         return { pagedAssigned, pagedUnassigned };
     }, [filteredAssignments, filteredParticipants, safePage, perPage]);
 
+    const toggleRowExpand = React.useCallback((key: string) => {
+        setExpandedRowIds((prev) => {
+            const next = new Set(prev);
+            if (next.has(key)) next.delete(key);
+            else next.add(key);
+            return next;
+        });
+    }, []);
+
+    function renderExpandedDetail(p: Participant) {
+        return (
+            <TableRow className="border-b bg-slate-50/50 dark:bg-slate-900/20">
+                <TableCell colSpan={6} className="px-6 py-3">
+                    <div className="grid gap-4 sm:grid-cols-2">
+                        <div>
+                            <div className="mb-1 text-xs font-semibold uppercase tracking-wider text-slate-500">
+                                Food Restrictions
+                            </div>
+                            {(p.food_restrictions ?? []).length > 0 ? (
+                                <div className="space-y-1">
+                                    <div className="flex flex-wrap gap-1">
+                                        {(p.food_restrictions ?? []).map((r) => {
+                                            const label = FOOD_RESTRICTION_OPTIONS.find((o) => o.value === r)?.label ?? r;
+                                            return (
+                                                <Badge key={r} variant="secondary" className="text-xs">
+                                                    {label}
+                                                </Badge>
+                                            );
+                                        })}
+                                    </div>
+                                    {p.dietary_allergies && (
+                                        <div className="text-xs text-slate-600 dark:text-slate-400">
+                                            <span className="font-medium">Allergies:</span> {p.dietary_allergies}
+                                        </div>
+                                    )}
+                                    {p.dietary_other && (
+                                        <div className="text-xs text-slate-600 dark:text-slate-400">
+                                            <span className="font-medium">Other:</span> {p.dietary_other}
+                                        </div>
+                                    )}
+                                </div>
+                            ) : (
+                                <div className="text-xs text-slate-400">None specified</div>
+                            )}
+                        </div>
+                        <div>
+                            <div className="mb-1 text-xs font-semibold uppercase tracking-wider text-slate-500">
+                                Accessibility Needs
+                            </div>
+                            {(p.accessibility_needs ?? []).length > 0 ? (
+                                <div className="space-y-1">
+                                    <div className="flex flex-wrap gap-1">
+                                        {(p.accessibility_needs ?? []).map((n) => {
+                                            const label = ACCESSIBILITY_NEEDS_OPTIONS.find((o) => o.value === n)?.label ?? n;
+                                            return (
+                                                <Badge key={n} variant="secondary" className="text-xs">
+                                                    {label}
+                                                </Badge>
+                                            );
+                                        })}
+                                    </div>
+                                    {p.accessibility_other && (
+                                        <div className="text-xs text-slate-600 dark:text-slate-400">
+                                            <span className="font-medium">Other:</span> {p.accessibility_other}
+                                        </div>
+                                    )}
+                                </div>
+                            ) : (
+                                <div className="text-xs text-slate-400">None specified</div>
+                            )}
+                        </div>
+                    </div>
+                </TableCell>
+            </TableRow>
+        );
+    }
+
     const assignParticipantsCard = (
         <Card>
             <CardHeader>
@@ -876,6 +980,26 @@ export default function TableAssignmenyPage(props: PageProps) {
                                 Showing {Math.min((safePage - 1) * perPage + 1, totalFilteredRows)} to {Math.min(safePage * perPage, totalFilteredRows)} of {totalFilteredRows} entries
                             </span>
                         )}
+                        {totalFilteredRows > 0 && (
+                            <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                className="h-8 px-3 text-xs"
+                                onClick={() => {
+                                    if (expandedRowIds.size > 0) {
+                                        setExpandedRowIds(new Set());
+                                    } else {
+                                        const allKeys = new Set<string>();
+                                        paginatedData.pagedAssigned.forEach((a) => allKeys.add(`assigned-${a.id}`));
+                                        paginatedData.pagedUnassigned.forEach((p) => allKeys.add(`unassigned-${p.id}`));
+                                        setExpandedRowIds(allKeys);
+                                    }
+                                }}
+                            >
+                                {expandedRowIds.size > 0 ? 'Collapse All' : 'View All'}
+                            </Button>
+                        )}
                         <div className="relative flex-1">
                             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
                             <Input
@@ -933,10 +1057,21 @@ export default function TableAssignmenyPage(props: PageProps) {
                             ) : (
                                 <>
                                     {/* Assigned participants */}
-                                    {paginatedData.pagedAssigned.map((assignment) => (
-                                        <TableRow key={`assigned-${assignment.id}`}>
+                                    {paginatedData.pagedAssigned.map((assignment) => {
+                                        const rowKey = `assigned-${assignment.id}`;
+                                        const isExpanded = expandedRowIds.has(rowKey);
+                                        return (
+                                            <React.Fragment key={rowKey}>
+                                        <TableRow
+                                            className={cn(
+                                                'cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-900/40',
+                                                isExpanded && 'border-b-0',
+                                            )}
+                                            onClick={() => toggleRowExpand(rowKey)}
+                                        >
                                             <TableCell>
                                                 <div className="flex items-center gap-3">
+                                                    <ChevronDown className={cn('h-3.5 w-3.5 shrink-0 text-slate-400 transition-transform', isExpanded && 'rotate-180')} />
                                                     {assignment.participant?.country ? (
                                                         <FlagThumb
                                                             country={assignment.participant.country}
@@ -953,7 +1088,7 @@ export default function TableAssignmenyPage(props: PageProps) {
                                                     </div>
                                                 </div>
                                             </TableCell>
-                                            <TableCell>
+                                            <TableCell onClick={(e) => e.stopPropagation()}>
                                                 <SearchableDropdown
                                                     value={tableDrafts[assignment.id] ?? String(assignment.table_id)}
                                                     onValueChange={(v) => {
@@ -975,7 +1110,7 @@ export default function TableAssignmenyPage(props: PageProps) {
                                                     })}
                                                 />
                                             </TableCell>
-                                            <TableCell>
+                                            <TableCell onClick={(e) => e.stopPropagation()}>
                                                 <div className="flex items-center gap-2">
                                                     <Input
                                                         type="number"
@@ -1015,7 +1150,7 @@ export default function TableAssignmenyPage(props: PageProps) {
                                                     type="button"
                                                     size="sm"
                                                     variant="ghost"
-                                                    onClick={() => removeAssignment(assignment.id)}
+                                                    onClick={(e) => { e.stopPropagation(); removeAssignment(assignment.id); }}
                                                     aria-label="Remove participant"
                                                     disabled={isEventClosed}
                                                 >
@@ -1023,13 +1158,27 @@ export default function TableAssignmenyPage(props: PageProps) {
                                                 </Button>
                                             </TableCell>
                                         </TableRow>
-                                    ))}
+                                        {isExpanded && assignment.participant && renderExpandedDetail(assignment.participant)}
+                                        </React.Fragment>
+                                        );
+                                    })}
 
                                     {/* Unassigned participants */}
-                                    {paginatedData.pagedUnassigned.map((participant) => (
-                                        <TableRow key={`unassigned-${participant.id}`}>
+                                    {paginatedData.pagedUnassigned.map((participant) => {
+                                        const rowKey = `unassigned-${participant.id}`;
+                                        const isExpanded = expandedRowIds.has(rowKey);
+                                        return (
+                                            <React.Fragment key={rowKey}>
+                                        <TableRow
+                                            className={cn(
+                                                'cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-900/40',
+                                                isExpanded && 'border-b-0',
+                                            )}
+                                            onClick={() => toggleRowExpand(rowKey)}
+                                        >
                                             <TableCell>
                                                 <div className="flex items-center gap-3">
+                                                    <ChevronDown className={cn('h-3.5 w-3.5 shrink-0 text-slate-400 transition-transform', isExpanded && 'rotate-180')} />
                                                     {participant.country ? (
                                                         <FlagThumb country={participant.country} size={22} />
                                                     ) : null}
@@ -1043,7 +1192,7 @@ export default function TableAssignmenyPage(props: PageProps) {
                                                     </div>
                                                 </div>
                                             </TableCell>
-                                            <TableCell>
+                                            <TableCell onClick={(e) => e.stopPropagation()}>
                                                 <SearchableDropdown
                                                     value=""
                                                     onValueChange={(v) => {
@@ -1078,7 +1227,10 @@ export default function TableAssignmenyPage(props: PageProps) {
                                             </TableCell>
                                             <TableCell />
                                         </TableRow>
-                                    ))}
+                                        {isExpanded && renderExpandedDetail(participant)}
+                                        </React.Fragment>
+                                        );
+                                    })}
                                 </>
                             )}
                         </TableBody>
