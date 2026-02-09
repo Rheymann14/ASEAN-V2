@@ -502,99 +502,113 @@ export default function TableAssignmenyPage(props: PageProps) {
         setTableDrafts(next);
     }, [allAssignments]);
 
-    // Auto-unassign: remove excess assignments when table capacity is reduced
+    // Helper: get CSRF token for fetch calls
+    function getCsrfToken() {
+        return document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') ?? '';
+    }
+
+    // Auto-unassign: batch-remove all excess assignments in one go when capacity is reduced
     const isAutoUnassigning = React.useRef(false);
 
     React.useEffect(() => {
         if (isAutoUnassigning.current) return;
         if (!selectedEventId || tables.length === 0) return;
 
-        // Find first over-capacity table
-        const overCapTable = tables.find((t) => t.assigned_count > t.capacity);
-        if (!overCapTable) return;
+        // Collect ALL excess assignment IDs across all over-capacity tables
+        const excessIds: number[] = [];
+        tables.forEach((t) => {
+            if (t.assigned_count > t.capacity) {
+                t.assignments.slice(t.capacity).forEach((a) => excessIds.push(a.id));
+            }
+        });
+        if (excessIds.length === 0) return;
 
         isAutoUnassigning.current = true;
-        // Remove the last assignment(s) beyond capacity
-        const excess = overCapTable.assignments.slice(overCapTable.capacity);
-        const toRemove = excess[0]; // remove one at a time so Inertia reloads between each
-        if (!toRemove) {
-            isAutoUnassigning.current = false;
-            return;
-        }
+        const csrf = getCsrfToken();
 
-        router.delete(ENDPOINTS.assignments.destroy(toRemove.id), {
-            preserveScroll: true,
-            onFinish: () => {
+        // Delete all excess assignments in parallel, then reload once
+        Promise.all(
+            excessIds.map((id) =>
+                fetch(ENDPOINTS.assignments.destroy(id), {
+                    method: 'DELETE',
+                    headers: { 'X-CSRF-TOKEN': csrf, 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+                }),
+            ),
+        )
+            .then(() => {
+                router.visit(window.location.href, { preserveScroll: true, preserveState: true, onFinish: () => { isAutoUnassigning.current = false; } });
+            })
+            .catch(() => {
+                toast.error('Unable to remove excess assignments.');
                 isAutoUnassigning.current = false;
-            },
-            onError: () => {
-                toast.error('Unable to remove excess assignment.');
-                isAutoUnassigning.current = false;
-            },
-        });
+            });
     }, [selectedEventId, tables]);
 
-    // Manual auto-assign: admin clicks a button to distribute unassigned participants
-    const isAutoAssigning = React.useRef(false);
+    // Manual auto-assign: admin clicks a button to distribute all unassigned participants in one go
     const [autoAssignRunning, setAutoAssignRunning] = React.useState(false);
 
     function triggerAutoAssign() {
-        if (isAutoAssigning.current) return;
+        if (autoAssignRunning) return;
         if (!selectedEventId || isEventClosed || participants.length === 0 || tables.length === 0) {
             toast.error('No unassigned participants or no tables available.');
             return;
         }
 
-        const targetTable = tables.find((t) => t.capacity - t.assigned_count > 0);
-        if (!targetTable) {
+        // Build assignment plan: distribute participants across tables
+        const plan: Array<{ tableId: number; participantIds: number[] }> = [];
+        let remaining = [...participants];
+
+        for (const table of tables) {
+            if (remaining.length === 0) break;
+            const available = table.capacity - table.assigned_count;
+            if (available <= 0) continue;
+            const batch = remaining.splice(0, available);
+            plan.push({ tableId: table.id, participantIds: batch.map((p) => p.id) });
+        }
+
+        if (plan.length === 0) {
             toast.error('All tables are full. Increase capacity or add a new table.');
             return;
         }
 
-        isAutoAssigning.current = true;
         setAutoAssignRunning(true);
-        const available = targetTable.capacity - targetTable.assigned_count;
-        const batch = participants.slice(0, available);
+        const csrf = getCsrfToken();
 
-        router.post(
-            ENDPOINTS.assignments.store,
-            {
-                programme_id: selectedEventId,
-                participant_table_id: String(targetTable.id),
-                participant_ids: batch.map((p) => p.id),
-            },
-            {
-                preserveScroll: true,
-                onFinish: () => {
-                    isAutoAssigning.current = false;
-                    setAutoAssignRunning(false);
-                },
-                onError: () => {
-                    toast.error('Auto-assignment failed.');
-                    isAutoAssigning.current = false;
-                    setAutoAssignRunning(false);
-                },
-            },
-        );
+        // Execute all assignments in parallel, then reload once
+        Promise.all(
+            plan.map(({ tableId, participantIds }) =>
+                fetch(ENDPOINTS.assignments.store, {
+                    method: 'POST',
+                    headers: {
+                        'X-CSRF-TOKEN': csrf,
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest',
+                    },
+                    body: JSON.stringify({
+                        programme_id: selectedEventId,
+                        participant_table_id: String(tableId),
+                        participant_ids: participantIds,
+                    }),
+                }),
+            ),
+        )
+            .then((responses) => {
+                const allOk = responses.every((r) => r.ok);
+                if (allOk) {
+                    toast.success(remaining.length > 0
+                        ? `Assigned ${participants.length - remaining.length} participants. ${remaining.length} remain (tables full).`
+                        : 'All participants have been assigned.');
+                } else {
+                    toast.error('Some assignments failed.');
+                }
+                router.visit(window.location.href, { preserveScroll: true, preserveState: true, onFinish: () => setAutoAssignRunning(false) });
+            })
+            .catch(() => {
+                toast.error('Auto-assignment failed.');
+                setAutoAssignRunning(false);
+            });
     }
-
-    // Continue auto-assign if button was clicked and there are still unassigned participants
-    React.useEffect(() => {
-        if (!autoAssignRunning || isAutoAssigning.current) return;
-        if (participants.length === 0) {
-            setAutoAssignRunning(false);
-            toast.success('All participants have been assigned.');
-            return;
-        }
-        const targetTable = tables.find((t) => t.capacity - t.assigned_count > 0);
-        if (!targetTable) {
-            setAutoAssignRunning(false);
-            toast.info('All tables are full. Remaining participants are not assigned.');
-            return;
-        }
-        // Continue the batch
-        triggerAutoAssign();
-    }, [autoAssignRunning, participants, tables]);
 
 
     function assignParticipantToTable(participantId: number, tableId: string) {
