@@ -2108,33 +2108,60 @@ export default function ParticipantPage(props: PageProps) {
                                 ) : (
 
                                     <div className="overflow-hidden rounded-2xl border border-slate-200 dark:border-slate-800">
-                                         <div className="flex items-center gap-2 text-xs text-slate-600 dark:text-slate-400 m-2">
-                                                <span>Show</span>
-                                                <Select
-                                                    value={String(entriesPerPage)}
-                                                    onValueChange={(value) => setEntriesPerPage(Number(value))}
-                                                >
-                                                    <SelectTrigger className="h-8 w-[70px]">
-                                                        <SelectValue />
-                                                    </SelectTrigger>
-                                                    <SelectContent>
-                                                        {ENTRIES_PER_PAGE_OPTIONS.map((n) => (
-                                                            <SelectItem key={n} value={String(n)}>
-                                                                {n}
-                                                            </SelectItem>
-                                                        ))}
-                                                    </SelectContent>
-                                                </Select>
-                                                <span>entries</span>
-                                                <span className="ml-2">
-                                                    Showing{' '}
-                                                    {filteredParticipants.length === 0
-                                                        ? 0
-                                                        : (currentPage - 1) * entriesPerPage + 1}{' '}
-                                                    to {Math.min(currentPage * entriesPerPage, filteredParticipants.length)} of{' '}
-                                                    {filteredParticipants.length} entries
-                                                </span>
-                                            </div>
+                                        <div className="flex items-center gap-2 text-xs text-slate-600 dark:text-slate-400 m-2">
+                                            <span>Show</span>
+                                            <Select
+                                                value={String(entriesPerPage)}
+                                                onValueChange={(value) => setEntriesPerPage(Number(value))}
+                                            >
+                                                <SelectTrigger className="h-8 w-[70px]">
+                                                    <SelectValue />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    {ENTRIES_PER_PAGE_OPTIONS.map((n) => (
+                                                        <SelectItem key={n} value={String(n)}>
+                                                            {n}
+                                                        </SelectItem>
+                                                    ))}
+                                                </SelectContent>
+                                            </Select>
+                                            <span>entries</span>
+                                            <span className="ml-2">
+                                                Showing{' '}
+                                                {filteredParticipants.length === 0
+                                                    ? 0
+                                                    : (currentPage - 1) * entriesPerPage + 1}{' '}
+                                                to {Math.min(currentPage * entriesPerPage, filteredParticipants.length)} of{' '}
+                                                {filteredParticipants.length} entries
+                                            </span>
+                                            <Button
+                                                type="button"
+                                                variant="outline"
+                                                size="sm"
+                                                onClick={() => {
+                                                    const currentPageIds = paginatedParticipants.map((p) => p.id);
+                                                    const allExpanded = currentPageIds.every((id) => expandedRowIds.has(id));
+                                                    if (allExpanded) {
+                                                        setExpandedRowIds((prev) => {
+                                                            const next = new Set(prev);
+                                                            currentPageIds.forEach((id) => next.delete(id));
+                                                            return next;
+                                                        });
+                                                    } else {
+                                                        setExpandedRowIds((prev) => {
+                                                            const next = new Set(prev);
+                                                            currentPageIds.forEach((id) => next.add(id));
+                                                            return next;
+                                                        });
+                                                    }
+                                                }}
+                                            >
+                                                {paginatedParticipants.length > 0 && paginatedParticipants.every((p) => expandedRowIds.has(p.id))
+                                                    ? 'Collapse All'
+                                                    : 'View All'}
+                                            </Button>
+                                        </div>
+
                                         <Table>
                                             <TableHeader>
                                                 <TableRow className="bg-slate-50 dark:bg-slate-900/40">
